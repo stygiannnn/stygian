@@ -181,8 +181,8 @@
 </div>
 
 <style>
-  .editor { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; background: #09090b; color: #e7e5e4; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .panel { padding: 1.5rem; max-width: 520px; width: 100%; margin: 0 auto; overflow-y: auto; max-height: 100vh; display: flex; flex-direction: column; gap: 0.75rem; }
+  .editor { display: grid; grid-template-columns: 420px 1fr; min-height: 100vh; background: #09090b; color: #e7e5e4; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .panel { padding: 1.5rem; width: 100%; margin: 0; border-right: 1px solid #1f1f23; overflow-y: auto; max-height: 100vh; display: flex; flex-direction: column; gap: 0.75rem; }
   .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
   .back { background: none; border: 1px solid #27272a; color: #e7e5e4; padding: 0.4rem 0.8rem; border-radius: 8px; cursor: pointer; }
   .view { color: #818cf8; text-decoration: none; font-size: 0.9rem; }
