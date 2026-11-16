@@ -3,7 +3,6 @@
 const BLOCKED = [
   "nigger", "nigga", "faggot", "kike", "chink", "tranny", "cunt", "nazi", "hitler",
   "kkk", "beaner", "wetback", "gook", "pedophile", "molest", "retard", "whore",
-  // reserved / impersonation
   "admin", "administrator", "root", "moderator", "official", "support", "system", "staff", "stygian",
 ];
 
