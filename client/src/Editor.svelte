@@ -19,10 +19,10 @@
           bgMode: "color",
           bgGradient: { from: "#4f46e5", to: "#0a0a0f", angle: 135 },
           bgImage: "",
-          accent: "#6366f1",
           text: "#e7e5e4",
-          nameGradient: { enabled: false, from: "#6366f1", to: "#ec4899" },
           cursor: "",
+          card: { mode: "gradient", color: "#111117", from: "#1b1b2e", to: "#111117", angle: 135 },
+          name: { effect: "gradient", color: "#ffffff", from: "#8b5cf6", to: "#ec4899" },
         },
         layout: "background",
         banner: "",
@@ -39,22 +39,26 @@
       const res = await fetch("/api/me/profile");
       const d = await res.json();
       if (d.ok) {
-        const base = defaults();
+        const base = defaults().config.theme;
         const c = d.profile.config || {};
         const t = c.theme || {};
+        // migrate legacy nameGradient -> name effect
+        let name = base.name;
+        if (t.name && t.name.effect) name = { effect: t.name.effect, color: t.name.color || base.name.color, from: t.name.from || base.name.from, to: t.name.to || base.name.to };
+        else if (t.nameGradient?.enabled) name = { effect: "gradient", color: "#ffffff", from: t.nameGradient.from || base.name.from, to: t.nameGradient.to || base.name.to };
         data = {
           displayName: d.profile.displayName || "",
           bio: d.profile.bio || "",
           config: {
             theme: {
-              bg: t.bg || base.config.theme.bg,
+              bg: t.bg || base.bg,
               bgMode: t.bgMode || "color",
-              bgGradient: { from: t.bgGradient?.from || base.config.theme.bgGradient.from, to: t.bgGradient?.to || base.config.theme.bgGradient.to, angle: t.bgGradient?.angle ?? 135 },
+              bgGradient: { from: t.bgGradient?.from || base.bgGradient.from, to: t.bgGradient?.to || base.bgGradient.to, angle: t.bgGradient?.angle ?? 135 },
               bgImage: t.bgImage || "",
-              accent: t.accent || base.config.theme.accent,
-              text: t.text || base.config.theme.text,
-              nameGradient: { enabled: !!t.nameGradient?.enabled, from: t.nameGradient?.from || base.config.theme.nameGradient.from, to: t.nameGradient?.to || base.config.theme.nameGradient.to },
+              text: t.text || base.text,
               cursor: t.cursor || "",
+              card: { mode: t.card?.mode === "color" ? "color" : "gradient", color: t.card?.color || base.card.color, from: t.card?.from || base.card.from, to: t.card?.to || base.card.to, angle: t.card?.angle ?? 135 },
+              name,
             },
             layout: c.layout === "banner" ? "banner" : "background",
             banner: c.banner || "",
@@ -95,7 +99,6 @@
     } catch { savedMsg = "Couldn't save"; }
     saving = false;
   }
-
 </script>
 
 <div class="editor">
@@ -113,6 +116,22 @@
       <label>Status<input bind:value={data.config.status} maxlength="100" placeholder="ribbit 🐸" /></label>
       <label>Avatar image URL<input bind:value={data.config.avatar} placeholder="https://…" /></label>
 
+      <div class="section">Display name style</div>
+      <div class="seg quad">
+        <button class:on={data.config.theme.name.effect === "solid"} onclick={() => (data.config.theme.name.effect = "solid")}>Solid</button>
+        <button class:on={data.config.theme.name.effect === "gradient"} onclick={() => (data.config.theme.name.effect = "gradient")}>Gradient</button>
+        <button class:on={data.config.theme.name.effect === "neon"} onclick={() => (data.config.theme.name.effect = "neon")}>Neon</button>
+        <button class:on={data.config.theme.name.effect === "gummy"} onclick={() => (data.config.theme.name.effect = "gummy")}>Gummy</button>
+      </div>
+      {#if data.config.theme.name.effect === "solid" || data.config.theme.name.effect === "neon"}
+        <label class="c">Name color<input type="color" bind:value={data.config.theme.name.color} /></label>
+      {:else}
+        <div class="colors">
+          <label class="c">Name from<input type="color" bind:value={data.config.theme.name.from} /></label>
+          <label class="c">Name to<input type="color" bind:value={data.config.theme.name.to} /></label>
+        </div>
+      {/if}
+
       <div class="section">Page style</div>
       <div class="seg">
         <button class:on={data.config.layout === "background"} onclick={() => (data.config.layout = "background")}>Background</button>
@@ -121,6 +140,20 @@
 
       {#if data.config.layout === "banner"}
         <label>Banner image URL<input bind:value={data.config.banner} placeholder="https://…" /></label>
+        <div class="section">Card theme</div>
+        <div class="seg sm">
+          <button class:on={data.config.theme.card.mode === "color"} onclick={() => (data.config.theme.card.mode = "color")}>Solid</button>
+          <button class:on={data.config.theme.card.mode === "gradient"} onclick={() => (data.config.theme.card.mode = "gradient")}>Gradient</button>
+        </div>
+        {#if data.config.theme.card.mode === "color"}
+          <label class="c">Card color<input type="color" bind:value={data.config.theme.card.color} /></label>
+        {:else}
+          <div class="colors">
+            <label class="c">Card from<input type="color" bind:value={data.config.theme.card.from} /></label>
+            <label class="c">Card to<input type="color" bind:value={data.config.theme.card.to} /></label>
+          </div>
+          <label>Angle: {data.config.theme.card.angle}°<input type="range" min="0" max="360" bind:value={data.config.theme.card.angle} /></label>
+        {/if}
       {:else}
         <div class="seg sm">
           <button class:on={data.config.theme.bgMode === "color"} onclick={() => (data.config.theme.bgMode = "color")}>Color</button>
@@ -140,27 +173,15 @@
         {/if}
       {/if}
 
-      <div class="section">Colors</div>
-      <div class="colors">
-        <label class="c">Accent<input type="color" bind:value={data.config.theme.accent} /></label>
-        <label class="c">Text<input type="color" bind:value={data.config.theme.text} /></label>
-      </div>
-      <label class="check"><input type="checkbox" bind:checked={data.config.theme.nameGradient.enabled} /> Gradient title</label>
-      {#if data.config.theme.nameGradient.enabled}
-        <div class="colors">
-          <label class="c">Title from<input type="color" bind:value={data.config.theme.nameGradient.from} /></label>
-          <label class="c">Title to<input type="color" bind:value={data.config.theme.nameGradient.to} /></label>
-        </div>
-      {/if}
-
       <label>Custom cursor image URL (PNG, ≤128px)<input bind:value={data.config.theme.cursor} placeholder="https://…png" /></label>
 
       <div class="section">Links <button class="add" onclick={addLink}>+ Add</button></div>
+      <p class="hint">Icons are detected automatically — type "discord", a Twitter link, etc.</p>
       <div class="links">
         {#each data.config.links as link, i (link.id)}
           <div class="link-row" draggable="true" ondragstart={() => (dragIndex = i)} ondragover={(e) => e.preventDefault()} ondrop={() => onDrop(i)}>
             <span class="grip" title="Drag to reorder">⠿</span>
-            <input bind:value={link.label} placeholder="Label" />
+            <input bind:value={link.label} placeholder="Label (optional)" />
             <input bind:value={link.url} placeholder="https://…" />
             <button class="del" onclick={() => removeLink(i)} aria-label="Remove">✕</button>
           </div>
@@ -191,11 +212,9 @@
   .view { color: #818cf8; text-decoration: none; font-size: 0.9rem; }
   .section { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; color: #71717a; margin-top: 0.7rem; display: flex; justify-content: space-between; align-items: center; }
   label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: #a1a1aa; }
-  label.check { flex-direction: row; align-items: center; gap: 0.5rem; }
   input, textarea { padding: 0.55rem 0.7rem; border-radius: 9px; border: 1px solid #27272a; background: #111113; color: #e7e5e4; font-size: 0.88rem; outline: none; font-family: inherit; }
   input:focus, textarea:focus { border-color: #6366f1; }
   input[type="range"] { padding: 0; }
-  input[type="checkbox"] { width: auto; }
   .colors { display: flex; gap: 0.7rem; }
   .colors .c, label.c { flex: 1; }
   input[type="color"] { padding: 0; height: 34px; width: 100%; background: none; border: 1px solid #27272a; cursor: pointer; }
@@ -203,6 +222,7 @@
   .seg button { flex: 1; background: #111113; border: 1px solid #27272a; color: #a1a1aa; padding: 0.5rem; border-radius: 8px; cursor: pointer; font-size: 0.82rem; }
   .seg button.on { background: #6366f1; border-color: #6366f1; color: #fff; }
   .seg.sm button { font-size: 0.78rem; padding: 0.45rem 0.3rem; }
+  .seg.quad button { font-size: 0.78rem; padding: 0.45rem 0.2rem; }
   .add { background: #27272a; border: none; color: #e7e5e4; padding: 0.3rem 0.6rem; border-radius: 7px; cursor: pointer; font-size: 0.75rem; text-transform: none; letter-spacing: 0; }
   .links { display: flex; flex-direction: column; gap: 0.5rem; }
   .link-row { display: flex; gap: 0.4rem; align-items: center; background: #111113; padding: 0.4rem; border-radius: 9px; border: 1px solid #1f1f23; }
