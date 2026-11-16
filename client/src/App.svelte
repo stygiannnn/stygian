@@ -1,16 +1,21 @@
 <script>
-  let view = $state("loading");   // loading | landing | signup | verify | login | dashboard
+  import Profile from "./Profile.svelte";
+  import Editor from "./Editor.svelte";
+
+  let view = $state("loading"); // loading | public | notfound | landing | signup | verify | login | dashboard | editor
   let user = $state(null);
+  let publicProfile = $state(null);
   let error = $state("");
   let busy = $state(false);
 
-  // form fields
   let email = $state("");
   let username = $state("");
   let password = $state("");
   let identifier = $state("");
   let code = $state("");
   let pendingEmail = $state("");
+
+  const routeMatch = window.location.pathname.match(/^\/@([a-zA-Z0-9_-]{3,20})$/);
 
   const ERRORS = {
     invalid_email: "That email doesn't look right.",
@@ -39,10 +44,19 @@
   }
 
   async function init() {
+    if (routeMatch) {
+      try {
+        const res = await fetch("/api/profile/" + routeMatch[1]);
+        const d = await res.json();
+        if (d.ok) { publicProfile = d.profile; view = "public"; }
+        else view = "notfound";
+      } catch { view = "notfound"; }
+      return;
+    }
     try {
       const res = await fetch("/api/auth/me");
-      const data = await res.json();
-      if (data.user) { user = data.user; view = "dashboard"; }
+      const d = await res.json();
+      if (d.user) { user = d.user; view = "dashboard"; }
       else view = "landing";
     } catch { view = "landing"; }
   }
@@ -57,7 +71,6 @@
     if (r.ok) { pendingEmail = r.email; code = ""; view = "verify"; }
     else error = msg(r.error);
   }
-
   async function doVerify(e) {
     e.preventDefault(); error = ""; busy = true;
     const r = await api("/api/auth/verify", { email: pendingEmail, code });
@@ -65,12 +78,10 @@
     if (r.ok) { user = r.user; view = "dashboard"; }
     else error = msg(r.error);
   }
-
   async function doResend() {
     await api("/api/auth/resend", { email: pendingEmail });
     error = "A new code is on its way.";
   }
-
   async function doLogin(e) {
     e.preventDefault(); error = ""; busy = true;
     const r = await api("/api/auth/login", { identifier, password });
@@ -79,93 +90,92 @@
     else if (r.error === "not_verified") { pendingEmail = r.email; code = ""; error = msg(r.error); view = "verify"; }
     else error = msg(r.error);
   }
-
   async function doLogout() {
     await api("/api/auth/logout", {});
     user = null; email = username = password = identifier = code = ""; view = "landing";
   }
 </script>
 
-<main>
-  <div class="card">
-    <h1>stygian</h1>
+{#if view === "public"}
+  <Profile profile={publicProfile} />
 
-    {#if view === "loading"}
-      <p class="tag">loading…</p>
+{:else if view === "editor"}
+  <Editor {user} onClose={() => (view = "dashboard")} />
 
-    {:else if view === "landing"}
-      <p class="tag">profiles, your way</p>
-      <div class="row">
-        <button onclick={() => go("signup")}>Create account</button>
-        <button class="ghost" onclick={() => go("login")}>Log in</button>
-      </div>
+{:else if view === "notfound"}
+  <main><div class="card"><h1>stygian</h1><p class="tag">no one here by that name.</p><a class="link" href="/">← home</a></div></main>
 
-    {:else if view === "signup"}
-      <p class="tag">create your account</p>
-      <form onsubmit={doSignup}>
-        <input type="email" placeholder="email" bind:value={email} autocomplete="email" />
-        <input type="text" placeholder="username" bind:value={username} autocomplete="username" />
-        <input type="password" placeholder="password (8+ chars)" bind:value={password} autocomplete="new-password" />
-        <button type="submit" disabled={busy}>{busy ? "…" : "Sign up"}</button>
-      </form>
-      <button class="link" onclick={() => go("login")}>Already have an account? Log in</button>
+{:else}
+  <main>
+    <div class="card">
+      <h1>stygian</h1>
 
-    {:else if view === "verify"}
-      <p class="tag">enter the 6-digit code sent to<br /><strong>{pendingEmail}</strong></p>
-      <form onsubmit={doVerify}>
-        <input type="text" inputmode="numeric" maxlength="6" placeholder="______" bind:value={code} class="code" />
-        <button type="submit" disabled={busy}>{busy ? "…" : "Verify"}</button>
-      </form>
-      <button class="link" onclick={doResend}>Resend code</button>
+      {#if view === "loading"}
+        <p class="tag">loading…</p>
 
-    {:else if view === "login"}
-      <p class="tag">welcome back</p>
-      <form onsubmit={doLogin}>
-        <input type="text" placeholder="email or username" bind:value={identifier} autocomplete="username" />
-        <input type="password" placeholder="password" bind:value={password} autocomplete="current-password" />
-        <button type="submit" disabled={busy}>{busy ? "…" : "Log in"}</button>
-      </form>
-      <button class="link" onclick={() => go("signup")}>Need an account? Sign up</button>
+      {:else if view === "landing"}
+        <p class="tag">profiles, your way</p>
+        <div class="row">
+          <button onclick={() => go("signup")}>Create account</button>
+          <button class="ghost" onclick={() => go("login")}>Log in</button>
+        </div>
 
-    {:else if view === "dashboard"}
-      <p class="tag">signed in as <strong>@{user.username}</strong></p>
-      <p class="muted">Your profile editor is coming next. 🎨</p>
-      <button class="ghost" onclick={doLogout}>Log out</button>
-    {/if}
+      {:else if view === "signup"}
+        <p class="tag">create your account</p>
+        <form onsubmit={doSignup}>
+          <input type="email" placeholder="email" bind:value={email} autocomplete="email" />
+          <input type="text" placeholder="username" bind:value={username} autocomplete="username" />
+          <input type="password" placeholder="password (8+ chars)" bind:value={password} autocomplete="new-password" />
+          <button type="submit" disabled={busy}>{busy ? "…" : "Sign up"}</button>
+        </form>
+        <button class="link" onclick={() => go("login")}>Already have an account? Log in</button>
 
-    {#if error}<p class="error">{error}</p>{/if}
-  </div>
-</main>
+      {:else if view === "verify"}
+        <p class="tag">enter the 6-digit code sent to<br /><strong>{pendingEmail}</strong></p>
+        <form onsubmit={doVerify}>
+          <input type="text" inputmode="numeric" maxlength="6" placeholder="______" bind:value={code} class="code" />
+          <button type="submit" disabled={busy}>{busy ? "…" : "Verify"}</button>
+        </form>
+        <button class="link" onclick={doResend}>Resend code</button>
+
+      {:else if view === "login"}
+        <p class="tag">welcome back</p>
+        <form onsubmit={doLogin}>
+          <input type="text" placeholder="email or username" bind:value={identifier} autocomplete="username" />
+          <input type="password" placeholder="password" bind:value={password} autocomplete="current-password" />
+          <button type="submit" disabled={busy}>{busy ? "…" : "Log in"}</button>
+        </form>
+        <button class="link" onclick={() => go("signup")}>Need an account? Sign up</button>
+
+      {:else if view === "dashboard"}
+        <p class="tag">signed in as <strong>@{user.username}</strong></p>
+        <div class="row">
+          <button onclick={() => go("editor")}>Edit my page</button>
+          <a class="btnlink" href={"/@" + user.username} target="_blank" rel="noopener">View my page ↗</a>
+          <button class="ghost" onclick={doLogout}>Log out</button>
+        </div>
+      {/if}
+
+      {#if error}<p class="error">{error}</p>{/if}
+    </div>
+  </main>
+{/if}
 
 <style>
-  main {
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    background: radial-gradient(1200px 600px at 50% -10%, #1b1b2e, #0a0a0f 60%);
-    color: #e7e5e4;
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  }
+  main { min-height: 100vh; display: grid; place-items: center; background: radial-gradient(1200px 600px at 50% -10%, #1b1b2e, #0a0a0f 60%); color: #e7e5e4; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
   .card { text-align: center; padding: 2rem; width: min(360px, 90vw); }
   h1 { font-size: clamp(2.5rem, 10vw, 4.5rem); margin: 0 0 0.25rem; letter-spacing: -0.04em; font-weight: 700; }
   .tag { color: #a8a29e; margin: 0 0 1.5rem; line-height: 1.5; }
-  .muted { color: #78716c; font-size: 0.9rem; margin: 0.5rem 0 1.5rem; }
   form { display: flex; flex-direction: column; gap: 0.6rem; }
-  input {
-    padding: 0.7rem 0.9rem; border-radius: 10px; border: 1px solid #27272a;
-    background: #111113; color: #e7e5e4; font-size: 0.95rem; outline: none;
-  }
+  input { padding: 0.7rem 0.9rem; border-radius: 10px; border: 1px solid #27272a; background: #111113; color: #e7e5e4; font-size: 0.95rem; outline: none; }
   input:focus { border-color: #6366f1; }
   .code { text-align: center; letter-spacing: 0.5em; font-size: 1.2rem; }
-  button {
-    padding: 0.7rem 1rem; border-radius: 10px; border: none; cursor: pointer;
-    background: #6366f1; color: white; font-size: 0.95rem; font-weight: 600;
-    transition: opacity 0.15s;
-  }
+  button { padding: 0.7rem 1rem; border-radius: 10px; border: none; cursor: pointer; background: #6366f1; color: white; font-size: 0.95rem; font-weight: 600; }
   button:hover { opacity: 0.9; }
   button:disabled { opacity: 0.5; cursor: default; }
   button.ghost { background: transparent; border: 1px solid #3f3f46; color: #e7e5e4; }
-  button.link { background: none; border: none; color: #818cf8; font-weight: 400; font-size: 0.85rem; margin-top: 1rem; padding: 0; }
+  .link, button.link { background: none; border: none; color: #818cf8; font-weight: 400; font-size: 0.85rem; margin-top: 1rem; padding: 0; text-decoration: none; display: inline-block; cursor: pointer; }
+  .btnlink { padding: 0.7rem 1rem; border-radius: 10px; background: transparent; border: 1px solid #3f3f46; color: #e7e5e4; font-size: 0.95rem; font-weight: 600; text-decoration: none; }
   .row { display: flex; gap: 0.6rem; flex-direction: column; }
   .error { color: #f87171; font-size: 0.85rem; margin-top: 1rem; }
   strong { color: #e7e5e4; }
