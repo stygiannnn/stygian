@@ -10,6 +10,7 @@
 
   let email = $state("");
   let username = $state("");
+  let displayName = $state("");
   let password = $state("");
   let identifier = $state("");
   let code = $state("");
@@ -21,6 +22,8 @@
     invalid_email: "That email doesn't look right.",
     disposable_email: "Temporary / disposable emails aren't allowed.",
     invalid_username: "Username must be 3–20 letters, numbers, _ or -.",
+    inappropriate_username: "That username isn\u2019t allowed. Pick another.",
+    inappropriate_name: "That display name isn\u2019t allowed. Pick another.",
     weak_password: "Password must be at least 8 characters.",
     email_taken: "That email is already registered.",
     username_taken: "That username is taken.",
@@ -66,7 +69,7 @@
 
   async function doSignup(e) {
     e.preventDefault(); error = ""; busy = true;
-    const r = await api("/api/auth/signup", { email, username, password });
+    const r = await api("/api/auth/signup", { email, username, displayName, password });
     busy = false;
     if (r.ok) { pendingEmail = r.email; code = ""; view = "verify"; }
     else error = msg(r.error);
@@ -92,7 +95,7 @@
   }
   async function doLogout() {
     await api("/api/auth/logout", {});
-    user = null; email = username = password = identifier = code = ""; view = "landing";
+    user = null; email = username = displayName = password = identifier = code = ""; view = "landing";
   }
 </script>
 
@@ -124,7 +127,8 @@
         <p class="tag">create your account</p>
         <form onsubmit={doSignup}>
           <input type="email" placeholder="email" bind:value={email} autocomplete="email" />
-          <input type="text" placeholder="username" bind:value={username} autocomplete="username" />
+          <input type="text" placeholder="username (permanent)" bind:value={username} autocomplete="username" />
+          <input type="text" placeholder="display name (optional)" bind:value={displayName} maxlength="60" />
           <input type="password" placeholder="password (8+ chars)" bind:value={password} autocomplete="new-password" />
           <button type="submit" disabled={busy}>{busy ? "…" : "Sign up"}</button>
         </form>

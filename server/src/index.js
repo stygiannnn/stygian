@@ -1,6 +1,7 @@
 import { hashPassword, verifyPassword, sha256Hex, randomToken, randomCode, uuid } from "./crypto.js";
 import { sendVerificationEmail } from "./email.js";
 import { isDisposableEmail } from "./disposable.js";
+import { isCleanName } from "./filter.js";
 
 const SESSION_TTL = 60 * 60 * 24 * 30; // 30 days (seconds)
 const CODE_TTL = 60 * 15; // 15 minutes (seconds)
@@ -98,13 +99,16 @@ function publicUser(u) {
 
 // ---------- auth ----------
 async function signup(request, env) {
-  const { email, username, password } = await body(request);
+  const { email, username, displayName, password } = await body(request);
   const e = String(email || "").trim().toLowerCase();
   const u = String(username || "").trim();
+  const dn = String(displayName || "").trim();
   if (!validEmail(e)) return json({ ok: false, error: "invalid_email" }, 400);
   if (isDisposableEmail(e)) return json({ ok: false, error: "disposable_email" }, 400);
   if (!validUsername(u)) return json({ ok: false, error: "invalid_username" }, 400);
   if (!validPassword(password)) return json({ ok: false, error: "weak_password" }, 400);
+  if (!isCleanName(u)) return json({ ok: false, error: "inappropriate_username" }, 400);
+  if (dn && (dn.length > 60 || !isCleanName(dn))) return json({ ok: false, error: "inappropriate_name" }, 400);
 
   const existing = await env.DB.prepare("SELECT email, username_lower FROM users WHERE email = ? OR username_lower = ?")
     .bind(e, u.toLowerCase()).first();
@@ -121,7 +125,7 @@ async function signup(request, env) {
      VALUES (?, ?, ?, ?, ?, 0, ?, ?)`
   ).bind(id, e, u, u.toLowerCase(), pwHash, now, now).run();
   await env.DB.prepare("INSERT INTO profiles (user_id, display_name, bio, config, updated_at) VALUES (?, ?, '', '{}', ?)")
-    .bind(id, u, now).run();
+    .bind(id, dn || u, now).run();
 
   await issueCode(env, id, e);
   return json({ ok: true, needsVerification: true, email: e });
@@ -224,6 +228,7 @@ async function saveProfile(request, env) {
   if (!user) return json({ ok: false, error: "unauthorized" }, 401);
   const data = await body(request);
   const displayName = String(data.displayName ?? "").slice(0, 60);
+  if (displayName && !isCleanName(displayName)) return json({ ok: false, error: "inappropriate_name" }, 400);
   const bio = String(data.bio ?? "").slice(0, 300);
   const configStr = JSON.stringify(data.config ?? {});
   if (configStr.length > MAX_CONFIG_BYTES) return json({ ok: false, error: "too_large" }, 413);

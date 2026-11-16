@@ -26,6 +26,7 @@
         },
         layout: "background",
         banner: "",
+        status: "",
         avatar: "",
         links: [],
         music: { url: "", label: "" },
@@ -57,6 +58,7 @@
             },
             layout: c.layout === "banner" ? "banner" : "background",
             banner: c.banner || "",
+            status: c.status || "",
             avatar: c.avatar || "",
             links: Array.isArray(c.links) ? c.links.map((l) => ({ id: l.id || crypto.randomUUID(), label: l.label || "", url: l.url || "" })) : [],
             music: { url: c.music?.url || "", label: c.music?.label || "" },
@@ -108,6 +110,7 @@
     {:else}
       <label>Display name<input bind:value={data.displayName} maxlength="60" placeholder="Your name" /></label>
       <label>Bio<textarea bind:value={data.bio} maxlength="300" rows="3" placeholder="A short bio…"></textarea></label>
+      <label>Status<input bind:value={data.config.status} maxlength="100" placeholder="ribbit 🐸" /></label>
       <label>Avatar image URL<input bind:value={data.config.avatar} placeholder="https://…" /></label>
 
       <div class="section">Page style</div>
