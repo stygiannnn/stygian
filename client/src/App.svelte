@@ -15,7 +15,7 @@
   let code = $state("");
   let pendingEmail = $state("");
 
-  const routeMatch = window.location.pathname.match(/^\/@([a-zA-Z0-9_-]{3,20})$/);
+  const routeMatch = decodeURIComponent(window.location.pathname).match(/^\/@([a-zA-Z0-9_-]{3,20})$/);
 
   const ERRORS = {
     invalid_email: "That email doesn't look right.",
