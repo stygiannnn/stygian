@@ -14,7 +14,7 @@
   let cfg = $derived(profile?.config ?? {});
   let theme = $derived(cfg.theme ?? {});
   let layout = $derived(cfg.layout === "banner" ? "banner" : "background");
-  let status = $derived((cfg.status || "").slice(0, 100));
+  let status = $derived((cfg.status || "").slice(0, 50));
   let musicUrl = $derived(safeUrl(cfg.music?.url));
   let hasAudio = $derived(!!musicUrl && !preview);
 
@@ -129,7 +129,10 @@
   .bannerimg { height: 150px; background-size: cover; background-position: center; }
   .avwrap { display: flex; align-items: flex-end; gap: 0.75rem; padding: 0 1.1rem; margin-top: -46px; }
   .card .avatar { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 5px solid rgba(17,17,23,0.95); background: #15151b; flex-shrink: 0; }
-  .status { background: rgba(10,10,14,0.6); color: #dcddde; padding: 0.4rem 0.8rem; border-radius: 999px; font-size: 0.82rem; margin-bottom: 0.5rem; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid rgba(255,255,255,0.08); }
+  .status { position: relative; display: inline-block; width: fit-content; max-width: 60%; background: rgba(17,17,23,0.9); color: #dcddde; padding: 0.42rem 0.85rem; border-radius: 16px; font-size: 0.82rem; line-height: 1.3; margin-bottom: 0.6rem; border: 1px solid rgba(255,255,255,0.08); word-break: break-word; }
+  .status::before, .status::after { content: ""; position: absolute; background: rgba(17,17,23,0.9); border-radius: 50%; }
+  .status::before { width: 10px; height: 10px; left: 7px; bottom: -4px; }
+  .status::after { width: 5px; height: 5px; left: 3px; bottom: -10px; }
   .body { padding: 0.7rem 1.25rem 1.5rem; }
   .body .name { font-size: 1.55rem; margin: 0.3rem 0 0.1rem; font-weight: 700; display: inline-block; }
   .body .handle { color: #9aa0ab; margin: 0 0 0.8rem; font-size: 0.9rem; }
@@ -145,7 +148,7 @@
   .inner .bio { opacity: 0.85; margin: 0 0 1.6rem; line-height: 1.5; }
   .inner .links { display: flex; flex-direction: column; gap: 0.7rem; }
   .inner .np { display: inline-block; margin-top: 1.6rem; color: #9aa0ab; font-size: 0.9rem; }
-  .status.center { display: inline-block; margin: 0 0 1rem; }
+  .status.center { margin: 0.2rem 0 1.4rem; }
 
   /* social buttons — neutral, platform icon auto-detected (no accent theming) */
   .link { display: flex; align-items: center; gap: 0.7rem; padding: 0.8rem 1rem; border-radius: 12px; background: rgba(255,255,255,0.06); color: var(--text); text-decoration: none; font-weight: 600; border: 1px solid rgba(255,255,255,0.1); transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease; }
