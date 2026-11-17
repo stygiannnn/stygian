@@ -17,6 +17,24 @@
   let status = $derived((cfg.status || "").slice(0, 50));
   let musicUrl = $derived(safeUrl(cfg.music?.url));
   let hasAudio = $derived(!!musicUrl && !preview);
+  let socials = $derived(profile?.socials ?? {});
+
+  function statFor(key) {
+    const map = { x: "twitter", tiktok: "tiktok", pinterest: "pinterest" };
+    const pk = map[key];
+    return pk ? (socials[pk] || null) : null;
+  }
+  function fmt(n) {
+    if (n == null || isNaN(Number(n))) return "";
+    n = Number(n);
+    if (n >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, "") + "B";
+    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+    if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+    return String(n);
+  }
+  function badgeSvg() {
+    return '<svg class="verified" viewBox="0 0 22 22" width="15" height="15" aria-label="verified"><path fill="currentColor" d="M11 1.6l2 1.5 2.5-.2.9 2.3 2.2 1.2-.6 2.5 1.2 2.2-1.6 1.9.1 2.5-2.4.7L14 20.5l-2.3-.6-2 .6-2.3-1.2L4.9 18l-2.4-.7.1-2.5-1.6-1.9 1.2-2.2L1.6 8l2.2-1.2.9-2.3 2.5.2z"/><path fill="#fff" d="M9.7 13.1L7.5 10.9l1-1 1.2 1.2 3-3 1 1z"/></svg>';
+  }
 
   function pageStyle() {
     const t = theme;
@@ -54,11 +72,17 @@
     return `color:${c};`;
   }
 
-  // Banner-mode card background (Discord-style theme): solid | gradient
-  function cardStyle() {
+  // Banner-mode glass card: translucent colour tint over a blurred banner backdrop
+  function withAlpha(c, a) { return (typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c)) ? c + a : c; }
+  function tintStyle() {
     const c = theme.card || {};
-    if (c.mode === "color") return `background:${c.color || "#111117"};`;
-    return `background:linear-gradient(${c.angle ?? 135}deg,${c.from || "#1b1b2e"},${c.to || "#111117"});`;
+    const A = "80"; // ~50% — glassy
+    if (c.mode === "color") return `background:${withAlpha(c.color || "#111117", A)};`;
+    return `background:linear-gradient(${c.angle ?? 135}deg,${withAlpha(c.from || "#1b1b2e", A)},${withAlpha(c.to || "#111117", A)});`;
+  }
+  function cardBgStyle() {
+    const b = safeUrl(cfg.banner);
+    return b ? `background-image:url('${b}');` : "display:none;";
   }
 
   function enter() { entered = true; if (audioEl) audioEl.play().catch(() => {}); }
@@ -72,8 +96,10 @@
     {/if}
 
     {#if layout === "banner"}
-      <div class="card" style={cardStyle()}>
-        <div class="bannerimg" style={safeUrl(cfg.banner) ? `background-image:url('${safeUrl(cfg.banner)}')` : "background:rgba(0,0,0,0.25)"}></div>
+      <div class="card">
+        <div class="cardbg" style={cardBgStyle()}></div>
+        <div class="cardtint" style={tintStyle()}></div>
+        <div class="bannerimg" style={safeUrl(cfg.banner) ? `background-image:url('${safeUrl(cfg.banner)}')` : "background:rgba(255,255,255,0.03)"}></div>
         <div class="avwrap">
           {#if safeUrl(cfg.avatar)}<img class="avatar" src={safeUrl(cfg.avatar)} alt="" />{/if}
           {#if status}<span class="status">{status}</span>{/if}
@@ -86,9 +112,15 @@
             {#each (cfg.links || []) as link}
               {#if safeUrl(link.url)}
                 {@const key = detectPlatform(link)}
+                {@const s = statFor(key)}
                 <a class="link" href={safeUrl(link.url)} target="_blank" rel="noopener noreferrer nofollow">
                   <span class="ico">{@html iconSvg(key)}</span>
-                  <span class="lbl">{link.label || platformName(key)}</span>
+                  <span class="meta">
+                    <span class="lbl">{link.label || platformName(key)}{#if s?.verified}{@html badgeSvg()}{/if}</span>
+                    {#if s && (s.followers != null || s.likes != null)}
+                      <span class="stat">{#if s.followers != null}{fmt(s.followers)} followers{/if}{#if s.likes != null}{s.followers != null ? " · " : ""}{fmt(s.likes)} likes{/if}</span>
+                    {/if}
+                  </span>
                 </a>
               {/if}
             {/each}
@@ -107,9 +139,15 @@
           {#each (cfg.links || []) as link}
             {#if safeUrl(link.url)}
               {@const key = detectPlatform(link)}
+              {@const s = statFor(key)}
               <a class="link" href={safeUrl(link.url)} target="_blank" rel="noopener noreferrer nofollow">
                 <span class="ico">{@html iconSvg(key)}</span>
-                <span class="lbl">{link.label || platformName(key)}</span>
+                <span class="meta">
+                  <span class="lbl">{link.label || platformName(key)}{#if s?.verified}{@html badgeSvg()}{/if}</span>
+                  {#if s && (s.followers != null || s.likes != null)}
+                    <span class="stat">{#if s.followers != null}{fmt(s.followers)} followers{/if}{#if s.likes != null}{s.followers != null ? " · " : ""}{fmt(s.likes)} likes{/if}</span>
+                  {/if}
+                </span>
               </a>
             {/if}
           {/each}
@@ -125,15 +163,17 @@
   .enter { position: fixed; inset: 0; z-index: 10; border: none; background: rgba(0,0,0,0.75); color: #fff; font-size: 1.1rem; letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; backdrop-filter: blur(6px); }
 
   /* banner card (Discord-style) */
-  .card { width: min(440px, 94vw); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,0.55); }
-  .bannerimg { height: 150px; background-size: cover; background-position: center; }
-  .avwrap { display: flex; align-items: flex-end; gap: 0.75rem; padding: 0 1.1rem; margin-top: -46px; }
+  .card { position: relative; width: min(440px, 94vw); background: rgba(12,12,16,0.3); backdrop-filter: blur(20px) saturate(1.3); -webkit-backdrop-filter: blur(20px) saturate(1.3); border: none; border-radius: 20px; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,0.5); }
+  .cardbg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: blur(26px) brightness(0.5); transform: scale(1.3); z-index: 0; }
+  .cardtint { position: absolute; inset: 0; z-index: 1; }
+  .bannerimg { position: relative; z-index: 2; height: 150px; background-size: cover; background-position: center; }
+  .avwrap { position: relative; z-index: 2; display: flex; align-items: flex-end; gap: 0.75rem; padding: 0 1.1rem; margin-top: -46px; }
   .card .avatar { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 5px solid rgba(17,17,23,0.95); background: #15151b; flex-shrink: 0; }
   .status { position: relative; display: inline-block; width: fit-content; max-width: 60%; background: rgba(17,17,23,0.9); color: #dcddde; padding: 0.42rem 0.85rem; border-radius: 16px; font-size: 0.82rem; line-height: 1.3; margin-bottom: 0.6rem; border: 1px solid rgba(255,255,255,0.08); word-break: break-word; }
   .status::before, .status::after { content: ""; position: absolute; background: rgba(17,17,23,0.9); border-radius: 50%; }
   .status::before { width: 10px; height: 10px; left: 7px; bottom: -4px; }
   .status::after { width: 5px; height: 5px; left: 3px; bottom: -10px; }
-  .body { padding: 0.7rem 1.25rem 1.5rem; }
+  .body { position: relative; z-index: 2; padding: 0.7rem 1.25rem 1.5rem; }
   .body .name { font-size: 1.55rem; margin: 0.3rem 0 0.1rem; font-weight: 700; display: inline-block; }
   .body .handle { color: #9aa0ab; margin: 0 0 0.8rem; font-size: 0.9rem; }
   .body .bio { opacity: 0.85; margin: 0 0 1.2rem; line-height: 1.5; font-size: 0.92rem; }
@@ -154,5 +194,8 @@
   .link { display: flex; align-items: center; gap: 0.7rem; padding: 0.8rem 1rem; border-radius: 12px; background: rgba(255,255,255,0.06); color: var(--text); text-decoration: none; font-weight: 600; border: 1px solid rgba(255,255,255,0.1); transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease; }
   .link:hover { transform: translateY(-2px); background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.22); }
   .link .ico { display: inline-flex; align-items: center; flex-shrink: 0; opacity: 0.95; }
-  .link .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .link .meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+  .link .lbl { display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .link .stat { font-size: 0.72rem; opacity: 0.6; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .link :global(.verified) { width: 15px; height: 15px; flex-shrink: 0; color: #1d9bf0; }
 </style>

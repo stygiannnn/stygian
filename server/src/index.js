@@ -2,6 +2,7 @@ import { hashPassword, verifyPassword, sha256Hex, randomToken, randomCode, uuid 
 import { sendVerificationEmail } from "./email.js";
 import { isDisposableEmail } from "./disposable.js";
 import { isCleanName } from "./filter.js";
+import { PLATFORMS, pkceChallenge } from "./oauth.js";
 
 const SESSION_TTL = 60 * 60 * 24 * 30; // 30 days (seconds)
 const CODE_TTL = 60 * 15; // 15 minutes (seconds)
@@ -40,6 +41,10 @@ async function handleApi(url, request, env) {
   if (p === "/api/me/profile" && m === "GET") return myProfile(request, env);
   if (p === "/api/me/profile" && m === "PUT") return saveProfile(request, env);
   if (p.startsWith("/api/profile/") && m === "GET") return publicProfile(p.slice("/api/profile/".length), env);
+
+  if (p.startsWith("/api/oauth/") && m === "GET") return oauthRoute(p, url, request, env);
+  if (p === "/api/me/social" && m === "GET") return mySocial(request, env);
+  if (p.startsWith("/api/me/social/") && p.endsWith("/disconnect") && m === "POST") return disconnectSocial(p, request, env);
 
   return json({ ok: false, error: "not_found" }, 404);
 }
@@ -206,13 +211,14 @@ async function publicProfile(usernameRaw, env) {
   const u = decodeURIComponent(usernameRaw || "").toLowerCase();
   if (!validUsername(u)) return json({ ok: false, error: "not_found" }, 404);
   const row = await env.DB.prepare(
-    `SELECT u.username, p.display_name, p.bio, p.config
+    `SELECT u.id AS uid, u.username, p.display_name, p.bio, p.config
        FROM users u JOIN profiles p ON p.user_id = u.id
       WHERE u.username_lower = ? AND u.email_verified = 1`
   ).bind(u).first();
   if (!row) return json({ ok: false, error: "not_found" }, 404);
+  const socials = await loadPublicSocials(env, row.uid);
   return json({ ok: true, profile: {
-    username: row.username, displayName: row.display_name, bio: row.bio, config: parseConfig(row.config),
+    username: row.username, displayName: row.display_name, bio: row.bio, config: parseConfig(row.config), socials,
   }});
 }
 async function myProfile(request, env) {
@@ -235,5 +241,113 @@ async function saveProfile(request, env) {
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare("UPDATE profiles SET display_name = ?, bio = ?, config = ?, updated_at = ? WHERE user_id = ?")
     .bind(displayName, bio, configStr, now, user.id).run();
+  return json({ ok: true });
+}
+
+// ---------- social connections ----------
+function redirect(location) { return new Response(null, { status: 302, headers: { Location: location } }); }
+function baseUrl(env) { return env.PUBLIC_BASE_URL || "https://stygian.wtf"; }
+function redirectUri(env, platform) { return baseUrl(env) + "/api/oauth/" + platform + "/callback"; }
+
+async function loadPublicSocials(env, userId) {
+  const out = {};
+  try {
+    const res = await env.DB.prepare("SELECT platform, stats FROM social_connections WHERE user_id = ?").bind(userId).all();
+    for (const s of (res.results || [])) {
+      let st = {}; try { st = JSON.parse(s.stats || "{}"); } catch {}
+      out[s.platform] = {
+        username: st.username || "", followers: st.followers ?? null,
+        likes: st.likes ?? null, following: st.following ?? null, verified: !!st.verified,
+      };
+    }
+  } catch (e) { console.error("loadPublicSocials", e); }
+  return out;
+}
+
+async function oauthRoute(p, url, request, env) {
+  const parts = p.split("/").filter(Boolean); // ["api","oauth","<platform>","<action>"]
+  const platform = parts[2], action = parts[3];
+  if (!PLATFORMS[platform]) return json({ ok: false, error: "unknown_platform" }, 404);
+  if (action === "start") return oauthStart(platform, request, env);
+  if (action === "callback") return oauthCallback(platform, url, request, env);
+  return json({ ok: false, error: "not_found" }, 404);
+}
+
+async function oauthStart(platform, request, env) {
+  const user = await currentUser(request, env);
+  const base = baseUrl(env);
+  if (!user) return redirect(base + "/");
+  const prov = PLATFORMS[platform];
+  if (!prov.configured(env)) return redirect(base + "/?social_error=" + platform + "_not_configured");
+  const state = randomToken(16);
+  const now = Math.floor(Date.now() / 1000);
+  let verifier = null, challenge = null;
+  if (prov.pkce) { verifier = randomToken(48); challenge = await pkceChallenge(verifier); }
+  await env.DB.prepare("INSERT INTO oauth_states (state, user_id, platform, code_verifier, created_at) VALUES (?, ?, ?, ?, ?)")
+    .bind(state, user.id, platform, verifier, now).run();
+  return redirect(prov.authorize(env, state, redirectUri(env, platform), challenge));
+}
+
+async function oauthCallback(platform, url, request, env) {
+  const prov = PLATFORMS[platform];
+  const base = baseUrl(env);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  if (!code || !state) return redirect(base + "/?social_error=" + platform);
+  const st = await env.DB.prepare("SELECT user_id, platform, code_verifier FROM oauth_states WHERE state = ?").bind(state).first();
+  await env.DB.prepare("DELETE FROM oauth_states WHERE state = ?").bind(state).run();
+  if (!st || st.platform !== platform) return redirect(base + "/?social_error=" + platform);
+  try {
+    const tok = await prov.exchange(env, code, redirectUri(env, platform), st.code_verifier);
+    const accessToken = tok.access_token;
+    if (!accessToken) throw new Error("no_access_token");
+    const now = Math.floor(Date.now() / 1000);
+    const expiresAt = tok.expires_in ? now + Number(tok.expires_in) : null;
+    const stats = await prov.stats(accessToken);
+    await env.DB.prepare(
+      `INSERT INTO social_connections (user_id, platform, platform_user_id, platform_username, access_token, refresh_token, expires_at, stats, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, platform) DO UPDATE SET
+         platform_user_id = excluded.platform_user_id, platform_username = excluded.platform_username,
+         access_token = excluded.access_token, refresh_token = excluded.refresh_token,
+         expires_at = excluded.expires_at, stats = excluded.stats, updated_at = excluded.updated_at`
+    ).bind(st.user_id, platform, tok.open_id || null, stats.username || null, accessToken, tok.refresh_token || null, expiresAt, JSON.stringify(stats), now).run();
+    return redirect(base + "/?connected=" + platform);
+  } catch (e) {
+    console.error("oauth callback", platform, e);
+    return redirect(base + "/?social_error=" + platform);
+  }
+}
+
+async function mySocial(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+  const res = await env.DB.prepare("SELECT platform, platform_username, access_token, refresh_token, expires_at, stats FROM social_connections WHERE user_id = ?").bind(user.id).all();
+  const now = Math.floor(Date.now() / 1000);
+  const out = [];
+  for (const row of (res.results || [])) {
+    let stats = {}; try { stats = JSON.parse(row.stats || "{}"); } catch {}
+    try {
+      const prov = PLATFORMS[row.platform];
+      if (prov && row.expires_at && row.expires_at < now && row.refresh_token) {
+        const t = await prov.refresh(env, row.refresh_token);
+        if (t.access_token) {
+          const expiresAt = t.expires_in ? now + Number(t.expires_in) : null;
+          stats = await prov.stats(t.access_token);
+          await env.DB.prepare("UPDATE social_connections SET access_token = ?, refresh_token = ?, expires_at = ?, stats = ?, updated_at = ? WHERE user_id = ? AND platform = ?")
+            .bind(t.access_token, t.refresh_token || row.refresh_token, expiresAt, JSON.stringify(stats), now, user.id, row.platform).run();
+        }
+      }
+    } catch (e) { console.error("social refresh", row.platform, e); }
+    out.push({ platform: row.platform, username: row.platform_username, stats });
+  }
+  return json({ ok: true, socials: out });
+}
+
+async function disconnectSocial(p, request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+  const platform = p.split("/")[4];
+  await env.DB.prepare("DELETE FROM social_connections WHERE user_id = ? AND platform = ?").bind(user.id, platform).run();
   return json({ ok: true });
 }

@@ -16,7 +16,7 @@
   let code = $state("");
   let pendingEmail = $state("");
 
-  const routeMatch = decodeURIComponent(window.location.pathname).match(/^\/@([a-zA-Z0-9_-]{3,20})$/);
+  const routeMatch = decodeURIComponent(window.location.pathname).match(/^\/@?([a-zA-Z0-9_-]{3,20})$/);
 
   const ERRORS = {
     invalid_email: "That email doesn't look right.",
@@ -155,7 +155,7 @@
         <p class="tag">signed in as <strong>@{user.username}</strong></p>
         <div class="row">
           <button onclick={() => go("editor")}>Edit my page</button>
-          <a class="btnlink" href={"/@" + user.username} target="_blank" rel="noopener">View my page ↗</a>
+          <a class="btnlink" href={"/" + user.username} target="_blank" rel="noopener">View my page ↗</a>
           <button class="ghost" onclick={doLogout}>Log out</button>
         </div>
       {/if}

@@ -6,6 +6,8 @@
   let saving = $state(false);
   let savedMsg = $state("");
   let dragIndex = $state(-1);
+  let socials = $state([]);
+  let socialBusy = $state("");
 
   let data = $state(defaults());
 
@@ -24,6 +26,7 @@
           card: { mode: "gradient", color: "#111117", from: "#1b1b2e", to: "#111117", angle: 135 },
           name: { effect: "gradient", color: "#ffffff", from: "#8b5cf6", to: "#ec4899" },
         },
+        urlStyle: "plain",
         layout: "background",
         banner: "",
         status: "",
@@ -60,6 +63,7 @@
               card: { mode: t.card?.mode === "color" ? "color" : "gradient", color: t.card?.color || base.card.color, from: t.card?.from || base.card.from, to: t.card?.to || base.card.to, angle: t.card?.angle ?? 135 },
               name,
             },
+            urlStyle: c.urlStyle === "at" ? "at" : "plain",
             layout: c.layout === "banner" ? "banner" : "background",
             banner: c.banner || "",
             status: c.status || "",
@@ -75,6 +79,13 @@
   load();
 
   let preview = $derived({ username: user.username, displayName: data.displayName, bio: data.bio, config: data.config });
+  let copied = $state(false);
+  let profilePath = $derived((data.config.urlStyle === "at" ? "/@" : "/") + user.username);
+  let shareHost = $derived((typeof window !== "undefined" ? window.location.host : "stygian.wtf") + profilePath);
+  let shareUrl = $derived((typeof window !== "undefined" ? window.location.origin : "https://stygian.wtf") + profilePath);
+  async function copyUrl() {
+    try { await navigator.clipboard.writeText(shareUrl); copied = true; setTimeout(() => (copied = false), 1500); } catch {}
+  }
 
   function addLink() { data.config.links = [...data.config.links, { id: crypto.randomUUID(), label: "", url: "" }]; }
   function removeLink(i) { data.config.links = data.config.links.filter((_, idx) => idx !== i); }
@@ -99,18 +110,48 @@
     } catch { savedMsg = "Couldn't save"; }
     saving = false;
   }
+  async function loadSocials() {
+    try { const r = await fetch("/api/me/social"); const d = await r.json(); if (d.ok) socials = d.socials; } catch {}
+  }
+  loadSocials();
+  function connected(pf) { return socials.find((x) => x.platform === pf); }
+  function connectSocial(pf) { window.location.href = "/api/oauth/" + pf + "/start"; }
+  async function disconnectSocial(pf) {
+    socialBusy = pf;
+    try { await fetch("/api/me/social/" + pf + "/disconnect", { method: "POST" }); await loadSocials(); } catch {}
+    socialBusy = "";
+  }
+  function fmtn(n) {
+    if (n == null || isNaN(Number(n))) return "–";
+    n = Number(n);
+    if (n >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, "") + "B";
+    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+    if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+    return String(n);
+  }
 </script>
 
 <div class="editor">
   <div class="panel">
     <div class="head">
       <button class="back" onclick={onClose}>← Back</button>
-      <a class="view" href={"/@" + user.username} target="_blank" rel="noopener">View page ↗</a>
+      <a class="view" href={(data.config.urlStyle === "at" ? "/@" : "/") + user.username} target="_blank" rel="noopener">View page ↗</a>
     </div>
 
     {#if loading}
       <p class="dim">Loading…</p>
     {:else}
+      <div class="section">Profile link</div>
+      <div class="seg sm">
+        <button class:on={data.config.urlStyle === "plain"} onclick={() => (data.config.urlStyle = "plain")}>/{user.username}</button>
+        <button class:on={data.config.urlStyle === "at"} onclick={() => (data.config.urlStyle = "at")}>/@{user.username}</button>
+      </div>
+      <div class="urlrow">
+        <input class="urlin" readonly value={shareHost} />
+        <button class="copy" onclick={copyUrl}>{copied ? "Copied ✓" : "Copy"}</button>
+      </div>
+      <p class="hint">Plain links avoid the “%40” some browsers show for “@”. Both styles still work.</p>
+
       <label>Display name<input bind:value={data.displayName} maxlength="60" placeholder="Your name" /></label>
       <label>Bio<textarea bind:value={data.bio} maxlength="300" rows="3" placeholder="A short bio…"></textarea></label>
       <label>Status<input bind:value={data.config.status} maxlength="50" placeholder="ribbit 🐸" /></label>
@@ -189,6 +230,27 @@
         {#if data.config.links.length === 0}<p class="dim small">No links yet — add one.</p>{/if}
       </div>
 
+      <div class="section">Connected accounts</div>
+      <p class="hint">Connect to show live follower / like counts and verified badges on matching links.</p>
+      <div class="socials">
+        {#each [["tiktok", "TikTok"], ["twitter", "Twitter / X"], ["pinterest", "Pinterest"]] as [pf, name]}
+          {@const c = connected(pf)}
+          <div class="social-row">
+            <div class="si">
+              <strong>{name}</strong>
+              {#if c}
+                <span class="sm">@{c.username || "connected"} · {fmtn(c.stats?.followers)} followers{#if c.stats?.likes != null} · {fmtn(c.stats.likes)} likes{/if}{#if c.stats?.verified} · ✓ verified{/if}</span>
+              {/if}
+            </div>
+            {#if c}
+              <button class="dconn" onclick={() => disconnectSocial(pf)} disabled={socialBusy === pf}>Disconnect</button>
+            {:else}
+              <button class="conn" onclick={() => connectSocial(pf)}>Connect</button>
+            {/if}
+          </div>
+        {/each}
+      </div>
+
       <div class="section">Background music</div>
       <label>Audio file URL (.mp3 / .ogg)<input bind:value={data.config.music.url} placeholder="https://…mp3" /></label>
       <p class="hint">Plays on your page after a visitor clicks "enter" (browsers block instant autoplay).</p>
@@ -237,5 +299,16 @@
   .dim { color: #71717a; } .small { font-size: 0.8rem; }
   .preview { background: #000; position: sticky; top: 0; height: 100vh; overflow: hidden; }
   .frame { width: 100%; height: 100%; overflow-y: auto; }
-  @media (max-width: 820px) { .editor { grid-template-columns: 1fr; } .preview { display: none; } }
+  .socials { display: flex; flex-direction: column; gap: 0.5rem; }
+  .social-row { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; background: #111113; padding: 0.6rem 0.75rem; border-radius: 9px; border: 1px solid #1f1f23; }
+  .si { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .si strong { color: #e7e5e4; font-size: 0.88rem; }
+  .si .sm { color: #71717a; font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conn { background: #6366f1; border: none; color: #fff; padding: 0.4rem 0.8rem; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 600; flex-shrink: 0; }
+  .dconn { background: transparent; border: 1px solid #3f3f46; color: #a1a1aa; padding: 0.4rem 0.8rem; border-radius: 8px; cursor: pointer; font-size: 0.78rem; flex-shrink: 0; }
+  .dconn:disabled { opacity: 0.5; }
+    .urlrow { display: flex; gap: 0.4rem; }
+  .urlin { flex: 1; min-width: 0; color: #a1a1aa; }
+  .copy { background: #27272a; border: none; color: #e7e5e4; padding: 0 0.9rem; border-radius: 9px; cursor: pointer; font-size: 0.82rem; flex-shrink: 0; }
+    @media (max-width: 820px) { .editor { grid-template-columns: 1fr; } .preview { display: none; } }
 </style>
