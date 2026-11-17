@@ -167,12 +167,12 @@
   .cardbg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: blur(26px) brightness(0.5); transform: scale(1.3); z-index: 0; }
   .cardtint { position: absolute; inset: 0; z-index: 1; }
   .bannerimg { position: relative; z-index: 2; height: 150px; background-size: cover; background-position: center; }
-  .avwrap { position: relative; z-index: 2; display: flex; align-items: flex-end; gap: 0.75rem; padding: 0 1.1rem; margin-top: -46px; }
+  .avwrap { position: relative; z-index: 2; display: flex; align-items: flex-end; gap: 0.5rem; padding: 0 1.1rem; margin-top: -46px; }
   .card .avatar { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 5px solid rgba(17,17,23,0.95); background: #15151b; flex-shrink: 0; }
-  .status { position: relative; display: inline-block; width: fit-content; max-width: 60%; background: rgba(17,17,23,0.9); color: #dcddde; padding: 0.42rem 0.85rem; border-radius: 16px; font-size: 0.82rem; line-height: 1.3; margin-bottom: 0.6rem; border: 1px solid rgba(255,255,255,0.08); word-break: break-word; }
-  .status::before, .status::after { content: ""; position: absolute; background: rgba(17,17,23,0.9); border-radius: 50%; }
-  .status::before { width: 9px; height: 9px; left: -4px; bottom: 5px; }
-  .status::after { width: 5px; height: 5px; left: -11px; bottom: 1px; }
+  .status { position: relative; display: inline-block; width: fit-content; max-width: 60%; background: rgba(23,23,29,0.97); color: #dcddde; padding: 0.42rem 0.85rem; border-radius: 16px; font-size: 0.82rem; line-height: 1.3; margin-bottom: 0.6rem; border: 1px solid rgba(255,255,255,0.08); word-break: break-word; }
+  .status::before, .status::after { content: ""; position: absolute; background: rgba(23,23,29,0.97); border-radius: 50%; }
+  .status::before { width: 16px; height: 16px; left: -5px; bottom: 3px; }
+  .status::after { width: 7px; height: 7px; left: -15px; bottom: -1px; }
   .body { position: relative; z-index: 2; padding: 0.7rem 1.25rem 1.5rem; }
   .body .name { font-size: 1.55rem; margin: 0.3rem 0 0.1rem; font-weight: 700; display: inline-block; }
   .body .handle { color: #9aa0ab; margin: 0 0 0.8rem; font-size: 0.9rem; }
