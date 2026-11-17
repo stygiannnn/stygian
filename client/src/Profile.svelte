@@ -171,8 +171,8 @@
   .card .avatar { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 5px solid rgba(17,17,23,0.95); background: #15151b; flex-shrink: 0; }
   .status { position: relative; display: inline-block; width: fit-content; max-width: 60%; background: rgba(17,17,23,0.9); color: #dcddde; padding: 0.42rem 0.85rem; border-radius: 16px; font-size: 0.82rem; line-height: 1.3; margin-bottom: 0.6rem; border: 1px solid rgba(255,255,255,0.08); word-break: break-word; }
   .status::before, .status::after { content: ""; position: absolute; background: rgba(17,17,23,0.9); border-radius: 50%; }
-  .status::before { width: 10px; height: 10px; left: 7px; bottom: -4px; }
-  .status::after { width: 5px; height: 5px; left: 3px; bottom: -10px; }
+  .status::before { width: 9px; height: 9px; left: -4px; bottom: 5px; }
+  .status::after { width: 5px; height: 5px; left: -11px; bottom: 1px; }
   .body { position: relative; z-index: 2; padding: 0.7rem 1.25rem 1.5rem; }
   .body .name { font-size: 1.55rem; margin: 0.3rem 0 0.1rem; font-weight: 700; display: inline-block; }
   .body .handle { color: #9aa0ab; margin: 0 0 0.8rem; font-size: 0.9rem; }
@@ -182,13 +182,14 @@
 
   /* full-page background layout */
   .inner { width: min(440px, 92vw); text-align: center; position: relative; z-index: 1; }
-  .inner .avatar { width: 108px; height: 108px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,255,255,0.18); }
+  .inner .avatar { display: block; margin: 0 auto; width: 108px; height: 108px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,255,255,0.18); }
   .inner .name { font-size: 1.9rem; margin: 1rem 0 0.1rem; font-weight: 700; display: inline-block; }
   .inner .handle { color: #9aa0ab; margin: 0 0 0.6rem; font-size: 0.95rem; }
   .inner .bio { opacity: 0.85; margin: 0 0 1.6rem; line-height: 1.5; }
   .inner .links { display: flex; flex-direction: column; gap: 0.7rem; }
   .inner .np { display: inline-block; margin-top: 1.6rem; color: #9aa0ab; font-size: 0.9rem; }
-  .status.center { margin: 0.2rem 0 1.4rem; }
+  .status.center { margin: 0.2rem 0 1rem; }
+  .status.center::before, .status.center::after { display: none; }
 
   /* social buttons — neutral, platform icon auto-detected (no accent theming) */
   .link { display: flex; align-items: center; gap: 0.7rem; padding: 0.8rem 1rem; border-radius: 12px; background: rgba(255,255,255,0.06); color: var(--text); text-decoration: none; font-weight: 600; border: 1px solid rgba(255,255,255,0.1); transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease; }
