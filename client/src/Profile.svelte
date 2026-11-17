@@ -171,8 +171,8 @@
   .card .avatar { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 5px solid rgba(17,17,23,0.95); background: #15151b; flex-shrink: 0; }
   .status { position: relative; display: inline-block; width: fit-content; max-width: 60%; background: rgba(23,23,29,0.97); color: #dcddde; padding: 0.42rem 0.85rem; border-radius: 16px; font-size: 0.82rem; line-height: 1.3; margin-bottom: 0.6rem; border: 1px solid rgba(255,255,255,0.08); word-break: break-word; }
   .status::before, .status::after { content: ""; position: absolute; background: rgba(23,23,29,0.97); border-radius: 50%; }
-  .status::before { width: 8px; height: 8px; left: -15px; bottom: 15px; }
-  .status::after { width: 6px; height: 6px; left: -7px; bottom: -5px; }
+  .status::before { width: 9px; height: 9px; left: 4px; top: -11px; }
+  .status::after { width: 6px; height: 6px; left: -8px; top: -21px; }
   .body { position: relative; z-index: 2; padding: 0.7rem 1.25rem 1.5rem; }
   .body .name { font-size: 1.55rem; margin: 0.3rem 0 0.1rem; font-weight: 700; display: inline-block; }
   .body .handle { color: #9aa0ab; margin: 0 0 0.8rem; font-size: 0.9rem; }
