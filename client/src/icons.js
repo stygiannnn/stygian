@@ -73,7 +73,7 @@ const PLATFORM_DOMAIN = {
   discord: "discord.com", x: "x.com", instagram: "instagram.com", youtube: "youtube.com",
   tiktok: "tiktok.com", github: "github.com", spotify: "spotify.com", twitch: "twitch.tv",
   telegram: "telegram.org", reddit: "reddit.com", linkedin: "linkedin.com", facebook: "facebook.com",
-  steam: "steampowered.com", pinterest: "pinterest.com",
+  steam: "steampowered.com", pinterest: "pinterest.com", roblox: "roblox.com", epicgames: "epicgames.com",
 };
 
 // Best-effort domain for a link: the URL's host, else a known platform's domain. "" when none.
