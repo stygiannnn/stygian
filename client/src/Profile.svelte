@@ -49,17 +49,32 @@
       const key = "bf:" + d;
       let cached = null;
       try { cached = localStorage.getItem(key); } catch {}
-      const live = brandfetchUrl(d, BRANDFETCH_CLIENT_ID);
-      node.onerror = () => { node.onerror = null; node.src = FALLBACK_LOGO; };
-      node.src = cached || live;
-      if (!cached) {
-        fetch(live).then((r) => (r.ok ? r.blob() : null)).then((b) => {
+      if (cached) {
+        node.onerror = () => { node.onerror = null; node.src = FALLBACK_LOGO; };
+        node.src = cached;
+        return;
+      }
+      // Clean transparent symbol first, favicon-style icon next, generic glyph last.
+      const candidates = [
+        brandfetchUrl(d, BRANDFETCH_CLIENT_ID, "symbol"),
+        brandfetchUrl(d, BRANDFETCH_CLIENT_ID, "icon"),
+      ];
+      let i = 0;
+      node.onerror = () => {
+        if (i < candidates.length) { node.src = candidates[i++]; }
+        else { node.onerror = null; node.src = FALLBACK_LOGO; }
+      };
+      node.onload = () => {
+        const url = node.currentSrc || node.src;
+        if (!url || url.slice(0, 4) !== "http") return;
+        fetch(url).then((r) => (r.ok ? r.blob() : null)).then((b) => {
           if (!b || b.size > 80000) return;
           const fr = new FileReader();
           fr.onload = () => { try { localStorage.setItem(key, String(fr.result)); } catch {} };
           fr.readAsDataURL(b);
         }).catch(() => {});
-      }
+      };
+      node.src = candidates[i++];
     }
     apply(domain);
     return { update: apply };

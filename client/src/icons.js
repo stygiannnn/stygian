@@ -20,7 +20,7 @@ const P = {
 };
 
 const NAMES = {
-  discord: "Discord", x: "Twitter", instagram: "Instagram", youtube: "YouTube",
+  discord: "Discord", x: "X", instagram: "Instagram", youtube: "YouTube",
   tiktok: "TikTok", github: "GitHub", spotify: "Spotify", twitch: "Twitch",
   telegram: "Telegram", reddit: "Reddit", linkedin: "LinkedIn", facebook: "Facebook",
   steam: "Steam", pinterest: "Pinterest", email: "Email", link: "Link",
@@ -47,7 +47,7 @@ const MATCHERS = [
 export function detectPlatform(link) {
   const url = String(link?.url || "").trim().toLowerCase();
   const label = String(link?.label || "").trim().toLowerCase();
-  if (label === "x" || label === "twitter" || /\/\/x\.com|\bx\.com\//.test(url)) return "x";
+  if (label === "x" || label === "twitter" || /\/\/x(\.com)?(\/|$)/.test(url)) return "x";
   if (/^mailto:/.test(url) || (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(label) && !url)) return "email";
   const hay = url + " " + label;
   for (const [key, re] of MATCHERS) if (re.test(hay)) return key;
@@ -90,8 +90,9 @@ export function linkDomain(link) {
   return PLATFORM_DOMAIN[key] || "";
 }
 
-export function brandfetchUrl(domain, clientId) {
-  // symbol + theme=light => a light (monochrome-ish) mark on transparent, for dark UIs
+export function brandfetchUrl(domain, clientId, type) {
+  // real brand logo in its own colours, transparent where available.
+  // type: "symbol" (clean mark) preferred, "icon" (favicon-style) as a coverage fallback.
   return "https://cdn.brandfetch.io/domain/" + encodeURIComponent(domain) +
-    "/w/80/h/80/theme/light/fallback/404/symbol?c=" + encodeURIComponent(clientId || "");
+    "/w/80/h/80/fallback/404/" + (type || "symbol") + "?c=" + encodeURIComponent(clientId || "");
 }
