@@ -1,5 +1,5 @@
 <script>
-  import { detectPlatform, iconSvg, platformName } from "./icons.js";
+  import { detectPlatform, iconSvg, platformName, linkDomain, logoDevUrl, LOGODEV_TOKEN } from "./icons.js";
 
   let { profile, preview = false } = $props();
 
@@ -17,6 +17,8 @@
   let status = $derived((cfg.status || "").slice(0, 50));
   let musicUrl = $derived(safeUrl(cfg.music?.url));
   let hasAudio = $derived(!!musicUrl && !preview);
+  let verified = $derived(!!profile?.verified);
+  let nowPlaying = $derived(profile?.nowPlaying ?? null);
   let socials = $derived(profile?.socials ?? {});
 
   function statFor(key) {
@@ -34,6 +36,33 @@
   }
   function badgeSvg() {
     return '<svg class="verified" viewBox="0 0 22 22" width="15" height="15" aria-label="verified"><path fill="currentColor" d="M11 1.6l2 1.5 2.5-.2.9 2.3 2.2 1.2-.6 2.5 1.2 2.2-1.6 1.9.1 2.5-2.4.7L14 20.5l-2.3-.6-2 .6-2.3-1.2L4.9 18l-2.4-.7.1-2.5-1.6-1.9 1.2-2.2L1.6 8l2.2-1.2.9-2.3 2.5.2z"/><path fill="#fff" d="M9.7 13.1L7.5 10.9l1-1 1.2 1.2 3-3 1 1z"/></svg>';
+  }
+
+  // White fallback glyph (shown when logo.dev has no logo for a domain)
+  const FALLBACK_LOGO = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ffffff"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>');
+
+  // Logo <img> loader: use a cached data-URL instantly if present, else fetch from logo.dev
+  // and cache it client-side (localStorage) so later views are instant. Nothing is stored server-side.
+  function logoCache(node, domain) {
+    function apply(d) {
+      if (!d) { node.src = FALLBACK_LOGO; return; }
+      const key = "sl:" + d;
+      let cached = null;
+      try { cached = localStorage.getItem(key); } catch {}
+      const live = logoDevUrl(d, LOGODEV_TOKEN);
+      node.onerror = () => { node.onerror = null; node.src = FALLBACK_LOGO; };
+      node.src = cached || live;
+      if (!cached) {
+        fetch(live).then((r) => (r.ok ? r.blob() : null)).then((b) => {
+          if (!b || b.size > 80000) return;
+          const fr = new FileReader();
+          fr.onload = () => { try { localStorage.setItem(key, String(fr.result)); } catch {} };
+          fr.readAsDataURL(b);
+        }).catch(() => {});
+      }
+    }
+    apply(domain);
+    return { update: apply };
   }
 
   function pageStyle() {
@@ -109,7 +138,7 @@
           {#if status}<span class="status">{status}</span>{/if}
         </div>
         <div class="body">
-          <h1 class="name" style={nameStyle()}>{profile.displayName || "@" + profile.username}</h1>
+          <h1 class="name" style={nameStyle()}>{profile.displayName || "@" + profile.username}{#if verified}<span class="vbadge">{@html badgeSvg()}</span>{/if}</h1>
           <p class="handle">@{profile.username}</p>
           {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
           <div class="links">
@@ -117,10 +146,11 @@
               {#if safeUrl(link.url)}
                 {@const key = detectPlatform(link)}
                 {@const s = statFor(key)}
+                {@const dom = linkDomain(link)}
                 <a class="link" href={safeUrl(link.url)} target="_blank" rel="noopener noreferrer nofollow">
-                  <span class="ico">{@html iconSvg(key)}</span>
+                  <span class="ico">{#if LOGODEV_TOKEN && dom}<img class="logo" use:logoCache={dom} alt="" />{:else}{@html iconSvg(key)}{/if}</span>
                   <span class="meta">
-                    <span class="lbl">{link.label || platformName(key)}{#if s?.verified}{@html badgeSvg()}{/if}</span>
+                    <span class="lbl">{link.label || platformName(key)}</span>
                     {#if s && (s.followers != null || s.likes != null)}
                       <span class="stat">{#if s.followers != null}{fmt(s.followers)} followers{/if}{#if s.likes != null}{s.followers != null ? " · " : ""}{fmt(s.likes)} likes{/if}</span>
                     {/if}
@@ -135,7 +165,7 @@
     {:else}
       <div class="inner">
         {#if safeUrl(cfg.avatar)}<img class="avatar" src={safeUrl(cfg.avatar)} alt="" />{/if}
-        <h1 class="name" style={nameStyle()}>{profile.displayName || "@" + profile.username}</h1>
+        <h1 class="name" style={nameStyle()}>{profile.displayName || "@" + profile.username}{#if verified}<span class="vbadge">{@html badgeSvg()}</span>{/if}</h1>
         <p class="handle">@{profile.username}</p>
         {#if status}<span class="status center">{status}</span>{/if}
         {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
@@ -144,10 +174,11 @@
             {#if safeUrl(link.url)}
               {@const key = detectPlatform(link)}
               {@const s = statFor(key)}
+              {@const dom = linkDomain(link)}
               <a class="link" href={safeUrl(link.url)} target="_blank" rel="noopener noreferrer nofollow">
-                <span class="ico">{@html iconSvg(key)}</span>
+                <span class="ico">{#if LOGODEV_TOKEN && dom}<img class="logo" use:logoCache={dom} alt="" />{:else}{@html iconSvg(key)}{/if}</span>
                 <span class="meta">
-                  <span class="lbl">{link.label || platformName(key)}{#if s?.verified}{@html badgeSvg()}{/if}</span>
+                  <span class="lbl">{link.label || platformName(key)}</span>
                   {#if s && (s.followers != null || s.likes != null)}
                     <span class="stat">{#if s.followers != null}{fmt(s.followers)} followers{/if}{#if s.likes != null}{s.followers != null ? " · " : ""}{fmt(s.likes)} likes{/if}</span>
                   {/if}
@@ -159,6 +190,17 @@
         {#if musicUrl || cfg.music?.label}<p class="np">🎵 {cfg.music?.label || "Now playing"}</p>{/if}
       </div>
     {/if}
+    {#if nowPlaying}
+      <div class="nowplaying">
+        {#if nowPlaying.playing}
+          {#if nowPlaying.image}<img class="np-art" src={nowPlaying.image} alt="" />{/if}
+          <span class="np-txt"><span class="np-eq"></span>{nowPlaying.track}{#if nowPlaying.artist} — {nowPlaying.artist}{/if}</span>
+        {:else}
+          <span class="np-txt dim">this user isn't listening to anything right now</span>
+        {/if}
+      </div>
+    {/if}
+    {#if LOGODEV_TOKEN}<a class="credit" href="https://logo.dev" target="_blank" rel="noopener noreferrer">Icon credits · logo.dev</a>{/if}
   </div>
 {/if}
 
@@ -199,8 +241,18 @@
   .link { display: flex; align-items: center; gap: 0.7rem; padding: 0.8rem 1rem; border-radius: 12px; background: rgba(255,255,255,0.06); color: var(--text); text-decoration: none; font-weight: 600; border: 1px solid rgba(255,255,255,0.1); transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease; }
   .link:hover { transform: translateY(-2px); background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.22); }
   .link .ico { display: inline-flex; align-items: center; flex-shrink: 0; opacity: 0.95; }
+  .link .logo { width: 18px; height: 18px; object-fit: contain; filter: brightness(0) invert(1); }
   .link .meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
   .link .lbl { display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .link .stat { font-size: 0.72rem; opacity: 0.6; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .link :global(.verified) { width: 15px; height: 15px; flex-shrink: 0; color: #1d9bf0; }
+  .name .vbadge { display: inline-flex; vertical-align: middle; margin-left: 6px; }
+  .name :global(.verified) { width: 0.7em; height: 0.7em; color: #1d9bf0; }
+  .nowplaying { margin-top: 1rem; display: flex; align-items: center; gap: 0.6rem; max-width: min(440px, 94vw); background: rgba(23,23,29,0.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 0.5rem 0.75rem; color: #dcddde; font-size: 0.85rem; z-index: 1; }
+  .np-art { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+  .np-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .np-txt.dim { opacity: 0.6; }
+  .np-eq { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #1db954; margin-right: 6px; vertical-align: middle; }
+  .credit { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 0.68rem; letter-spacing: 0.02em; color: rgba(255,255,255,0.28); text-decoration: none; z-index: 5; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+  .credit:hover { color: rgba(255,255,255,0.55); }
 </style>

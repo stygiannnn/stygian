@@ -146,4 +146,112 @@ export const PLATFORMS = {
       };
     },
   },
+
+  spotify: {
+    pkce: false,
+    scopes: "user-read-currently-playing user-read-playback-state user-read-private",
+    configured(env) { return !!(env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET); },
+    _basic(env) { return "Basic " + btoa(env.SPOTIFY_CLIENT_ID + ":" + env.SPOTIFY_CLIENT_SECRET); },
+    authorize(env, state, redirect) {
+      const p = new URLSearchParams({
+        client_id: env.SPOTIFY_CLIENT_ID, response_type: "code",
+        redirect_uri: redirect, scope: this.scopes, state,
+      });
+      return "https://accounts.spotify.com/authorize?" + p.toString();
+    },
+    async exchange(env, code, redirect) {
+      const body = new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirect });
+      const r = await fetch("https://accounts.spotify.com/api/token", {
+        method: "POST", headers: { Authorization: this._basic(env), "Content-Type": "application/x-www-form-urlencoded" }, body,
+      });
+      return r.json();
+    },
+    async refresh(env, refreshToken) {
+      const body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken });
+      const r = await fetch("https://accounts.spotify.com/api/token", {
+        method: "POST", headers: { Authorization: this._basic(env), "Content-Type": "application/x-www-form-urlencoded" }, body,
+      });
+      return r.json();
+    },
+    async stats(accessToken) {
+      const r = await fetch("https://api.spotify.com/v1/me", { headers: { Authorization: "Bearer " + accessToken } });
+      const d = await r.json();
+      return { username: d.display_name || d.id || "", followers: d.followers?.total ?? null, likes: null, verified: true };
+    },
+    async nowPlaying(accessToken) {
+      const r = await fetch("https://api.spotify.com/v1/me/player/currently-playing", { headers: { Authorization: "Bearer " + accessToken } });
+      if (r.status === 204 || !r.ok) return { playing: false };
+      const d = await r.json();
+      if (!d || !d.item || !d.is_playing) return { playing: false };
+      const imgs = (d.item.album && d.item.album.images) || [];
+      return {
+        playing: true,
+        track: d.item.name || "",
+        artist: (d.item.artists || []).map((a) => a.name).join(", "),
+        image: (imgs[imgs.length - 1] && imgs[imgs.length - 1].url) || (imgs[0] && imgs[0].url) || "",
+        url: (d.item.external_urls && d.item.external_urls.spotify) || "",
+      };
+    },
+  },
+
+  roblox: {
+    pkce: true,
+    scopes: "openid profile",
+    configured(env) { return !!(env.ROBLOX_CLIENT_ID && env.ROBLOX_CLIENT_SECRET); },
+    authorize(env, state, redirect, challenge) {
+      const p = new URLSearchParams({
+        client_id: env.ROBLOX_CLIENT_ID, response_type: "code", redirect_uri: redirect,
+        scope: this.scopes, state, code_challenge: challenge, code_challenge_method: "S256",
+      });
+      return "https://apis.roblox.com/oauth/v1/authorize?" + p.toString();
+    },
+    async exchange(env, code, redirect, verifier) {
+      const body = new URLSearchParams({
+        grant_type: "authorization_code", code, redirect_uri: redirect, code_verifier: verifier || "",
+        client_id: env.ROBLOX_CLIENT_ID, client_secret: env.ROBLOX_CLIENT_SECRET,
+      });
+      const r = await fetch("https://apis.roblox.com/oauth/v1/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+      return r.json();
+    },
+    async refresh(env, refreshToken) {
+      const body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: env.ROBLOX_CLIENT_ID, client_secret: env.ROBLOX_CLIENT_SECRET });
+      const r = await fetch("https://apis.roblox.com/oauth/v1/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+      return r.json();
+    },
+    async stats(accessToken) {
+      const r = await fetch("https://apis.roblox.com/oauth/v1/userinfo", { headers: { Authorization: "Bearer " + accessToken } });
+      const d = await r.json();
+      return { username: d.preferred_username || d.name || "", followers: null, likes: null, verified: true };
+    },
+  },
+
+  discord: {
+    pkce: false,
+    scopes: "identify",
+    configured(env) { return !!(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET); },
+    authorize(env, state, redirect) {
+      const p = new URLSearchParams({
+        client_id: env.DISCORD_CLIENT_ID, response_type: "code", redirect_uri: redirect, scope: this.scopes, state,
+      });
+      return "https://discord.com/oauth2/authorize?" + p.toString();
+    },
+    async exchange(env, code, redirect) {
+      const body = new URLSearchParams({
+        grant_type: "authorization_code", code, redirect_uri: redirect,
+        client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET,
+      });
+      const r = await fetch("https://discord.com/api/oauth2/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+      return r.json();
+    },
+    async refresh(env, refreshToken) {
+      const body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET });
+      const r = await fetch("https://discord.com/api/oauth2/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+      return r.json();
+    },
+    async stats(accessToken) {
+      const r = await fetch("https://discord.com/api/users/@me", { headers: { Authorization: "Bearer " + accessToken } });
+      const d = await r.json();
+      return { username: d.global_name || d.username || "", followers: null, likes: null, verified: true };
+    },
+  },
 };

@@ -255,8 +255,12 @@ async function publicProfile(usernameRaw, env) {
   ).bind(u).first();
   if (!row) return json({ ok: false, error: "not_found" }, 404);
   const socials = await loadPublicSocials(env, row.uid);
+  const cfg = parseConfig(row.config);
+  const verified = Object.keys(socials).length > 0;
+  let nowPlaying = null;
+  if (cfg && cfg.spotifyNowPlaying) nowPlaying = await fetchNowPlaying(env, row.uid);
   return json({ ok: true, profile: {
-    username: row.username, displayName: row.display_name, bio: row.bio, config: parseConfig(row.config), socials,
+    username: row.username, displayName: row.display_name, bio: row.bio, config: cfg, socials, verified, nowPlaying,
   }});
 }
 async function myProfile(request, env) {
@@ -274,7 +278,9 @@ async function saveProfile(request, env) {
   const displayName = String(data.displayName ?? "").slice(0, 60);
   if (displayName && !isCleanName(displayName)) return json({ ok: false, error: "inappropriate_name" }, 400);
   const bio = String(data.bio ?? "").slice(0, 300);
-  const configStr = JSON.stringify(data.config ?? {});
+  const cfg = data.config ?? {};
+  if (cfg && Array.isArray(cfg.links) && cfg.links.length > 5) cfg.links = cfg.links.slice(0, 5);
+  const configStr = JSON.stringify(cfg);
   if (configStr.length > MAX_CONFIG_BYTES) return json({ ok: false, error: "too_large" }, 413);
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare("UPDATE profiles SET display_name = ?, bio = ?, config = ?, updated_at = ? WHERE user_id = ?")
@@ -300,6 +306,27 @@ async function loadPublicSocials(env, userId) {
     }
   } catch (e) { console.error("loadPublicSocials", e); }
   return out;
+}
+
+async function fetchNowPlaying(env, userId) {
+  try {
+    const row = await env.DB.prepare(
+      "SELECT access_token, refresh_token, expires_at FROM social_connections WHERE user_id = ? AND platform = 'spotify'"
+    ).bind(userId).first();
+    if (!row) return null; // spotify not connected
+    let token = row.access_token;
+    const now = Math.floor(Date.now() / 1000);
+    if (row.expires_at && row.expires_at < now && row.refresh_token) {
+      const t = await PLATFORMS.spotify.refresh(env, row.refresh_token);
+      if (t.access_token) {
+        token = t.access_token;
+        const expiresAt = t.expires_in ? now + Number(t.expires_in) : null;
+        await env.DB.prepare("UPDATE social_connections SET access_token = ?, refresh_token = ?, expires_at = ? WHERE user_id = ? AND platform = 'spotify'")
+          .bind(token, t.refresh_token || row.refresh_token, expiresAt, userId).run();
+      }
+    }
+    return await PLATFORMS.spotify.nowPlaying(token);
+  } catch (e) { console.error("nowPlaying", e); return { playing: false }; }
 }
 
 async function oauthRoute(p, url, request, env) {

@@ -33,6 +33,7 @@
         avatar: "",
         links: [],
         music: { url: "", label: "" },
+        spotifyNowPlaying: false,
       },
     };
   }
@@ -70,6 +71,7 @@
             avatar: c.avatar || "",
             links: Array.isArray(c.links) ? c.links.map((l) => ({ id: l.id || crypto.randomUUID(), label: l.label || "", url: l.url || "" })) : [],
             music: { url: c.music?.url || "", label: c.music?.label || "" },
+            spotifyNowPlaying: !!c.spotifyNowPlaying,
           },
         };
       }
@@ -80,15 +82,27 @@
 
   let preview = $derived({ username: user.username, displayName: data.displayName, bio: data.bio, config: data.config });
   let copied = $state(false);
-  let profilePath = $derived((data.config.urlStyle === "at" ? "/@" : "/") + user.username);
+  let saveOk = $state(true);
+  const MAX_LINKS = 5;
+  let linkMsg = $state("");
+  const SAVE_ERR = {
+    inappropriate_name: "That display name isn't allowed — it may contain blocked words or be reserved. Pick another.",
+    too_large: "That's too much to save — try fewer or smaller links.",
+    unauthorized: "Please log in again.",
+  };
+  let profilePath = $derived("/" + user.username);
   let shareHost = $derived((typeof window !== "undefined" ? window.location.host : "stygian.wtf") + profilePath);
   let shareUrl = $derived((typeof window !== "undefined" ? window.location.origin : "https://stygian.wtf") + profilePath);
   async function copyUrl() {
     try { await navigator.clipboard.writeText(shareUrl); copied = true; setTimeout(() => (copied = false), 1500); } catch {}
   }
 
-  function addLink() { data.config.links = [...data.config.links, { id: crypto.randomUUID(), label: "", url: "" }]; }
-  function removeLink(i) { data.config.links = data.config.links.filter((_, idx) => idx !== i); }
+  function addLink() {
+    if (data.config.links.length >= MAX_LINKS) { linkMsg = `Limit reached — up to ${MAX_LINKS} links. Remove one to add another.`; return; }
+    linkMsg = "";
+    data.config.links = [...data.config.links, { id: crypto.randomUUID(), label: "", url: "" }];
+  }
+  function removeLink(i) { data.config.links = data.config.links.filter((_, idx) => idx !== i); linkMsg = ""; }
   function onDrop(i) {
     if (dragIndex === -1 || dragIndex === i) { dragIndex = -1; return; }
     const arr = [...data.config.links];
@@ -99,15 +113,16 @@
   }
 
   async function save() {
-    saving = true; savedMsg = "";
+    saving = true; savedMsg = ""; saveOk = true;
     try {
       const res = await fetch("/api/me/profile", {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ displayName: data.displayName, bio: data.bio, config: data.config }),
       });
       const d = await res.json();
-      savedMsg = d.ok ? "Saved ✓" : "Couldn't save";
-    } catch { savedMsg = "Couldn't save"; }
+      if (d.ok) { savedMsg = "Saved ✓"; saveOk = true; }
+      else { saveOk = false; savedMsg = SAVE_ERR[d.error] || "Couldn't save."; }
+    } catch { saveOk = false; savedMsg = "Couldn't save."; }
     saving = false;
   }
   async function loadSocials() {
@@ -135,22 +150,18 @@
   <div class="panel">
     <div class="head">
       <button class="back" onclick={onClose}>← Back</button>
-      <a class="view" href={(data.config.urlStyle === "at" ? "/@" : "/") + user.username} target="_blank" rel="noopener">View page ↗</a>
+      <a class="view" href={"/" + user.username} target="_blank" rel="noopener">View page ↗</a>
     </div>
 
     {#if loading}
       <p class="dim">Loading…</p>
     {:else}
       <div class="section">Profile link</div>
-      <div class="seg sm">
-        <button class:on={data.config.urlStyle === "plain"} onclick={() => (data.config.urlStyle = "plain")}>/{user.username}</button>
-        <button class:on={data.config.urlStyle === "at"} onclick={() => (data.config.urlStyle = "at")}>/@{user.username}</button>
-      </div>
       <div class="urlrow">
         <input class="urlin" readonly value={shareHost} />
         <button class="copy" onclick={copyUrl}>{copied ? "Copied ✓" : "Copy"}</button>
       </div>
-      <p class="hint">Plain links avoid the “%40” some browsers show for “@”. Both styles still work.</p>
+      <p class="hint">Copy this to share your page.</p>
 
       <label>Display name<input bind:value={data.displayName} maxlength="60" placeholder="Your name" /></label>
       <label>Bio<textarea bind:value={data.bio} maxlength="300" rows="3" placeholder="A short bio…"></textarea></label>
@@ -219,7 +230,8 @@
       <label>Custom cursor image URL (PNG, ≤128px)<input bind:value={data.config.theme.cursor} placeholder="https://…png" /></label>
 
       <div class="section">Links <button class="add" onclick={addLink}>+ Add</button></div>
-      <p class="hint">Icons are detected automatically — type "discord", a Twitter link, etc.</p>
+      <p class="hint">Icons are detected automatically — type "discord", a Twitter link, etc. Up to {MAX_LINKS} links.</p>
+      {#if linkMsg}<p class="msg err">{linkMsg}</p>{/if}
       <div class="links">
         {#each data.config.links as link, i (link.id)}
           <div class="link-row" draggable="true" ondragstart={() => (dragIndex = i)} ondragover={(e) => e.preventDefault()} ondrop={() => onDrop(i)}>
@@ -233,15 +245,15 @@
       </div>
 
       <div class="section">Connected accounts</div>
-      <p class="hint">Connect to show live follower / like counts and verified badges on matching links.</p>
+      <p class="hint">Connecting an account verifies it’s really you — this makes impersonation less likely, and once connected you’ll get a verification badge on your profile card.</p>
       <div class="socials">
-        {#each [["tiktok", "TikTok"], ["twitter", "Twitter / X"], ["pinterest", "Pinterest"]] as [pf, name]}
+        {#each [["spotify", "Spotify"], ["tiktok", "TikTok"], ["pinterest", "Pinterest"], ["roblox", "Roblox"], ["discord", "Discord"]] as [pf, name]}
           {@const c = connected(pf)}
           <div class="social-row">
             <div class="si">
               <strong>{name}</strong>
               {#if c}
-                <span class="sm">@{c.username || "connected"} · {fmtn(c.stats?.followers)} followers{#if c.stats?.likes != null} · {fmtn(c.stats.likes)} likes{/if}{#if c.stats?.verified} · ✓ verified{/if}</span>
+                <span class="sm">@{c.username || "connected"}{#if c.stats?.followers != null} · {fmtn(c.stats.followers)} followers{/if}{#if c.stats?.likes != null} · {fmtn(c.stats.likes)} likes{/if} · ✓ connected</span>
               {/if}
             </div>
             {#if c}
@@ -258,8 +270,13 @@
       <p class="hint">Plays on your page after a visitor clicks "enter" (browsers block instant autoplay).</p>
       <label>Music label<input bind:value={data.config.music.label} placeholder="Now playing…" /></label>
 
+      {#if connected("spotify")}
+        <label class="ckbox"><input type="checkbox" bind:checked={data.config.spotifyNowPlaying} /> Show my Spotify “now playing” under my profile card</label>
+        <p class="hint">When on: shows your current track, or “isn’t listening right now” when nothing’s playing.</p>
+      {/if}
+
       <button class="save" onclick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
-      {#if savedMsg}<p class="msg">{savedMsg}</p>{/if}
+      {#if savedMsg}<p class="msg" class:err={!saveOk}>{savedMsg}</p>{/if}
     {/if}
   </div>
 
@@ -298,6 +315,7 @@
   .save { background: #6366f1; border: none; color: #fff; padding: 0.75rem; border-radius: 10px; font-weight: 600; cursor: pointer; margin-top: 0.8rem; }
   .save:disabled { opacity: 0.6; }
   .msg { text-align: center; color: #4ade80; font-size: 0.85rem; margin: 0; }
+  .msg.err { color: #f87171; }
   .dim { color: #71717a; } .small { font-size: 0.8rem; }
   .preview { background: #000; position: sticky; top: 0; height: 100vh; overflow: hidden; }
   .frame { width: 100%; height: 100%; overflow-y: auto; }
@@ -312,5 +330,7 @@
     .urlrow { display: flex; gap: 0.4rem; }
   .urlin { flex: 1; min-width: 0; color: #a1a1aa; }
   .copy { background: #27272a; border: none; color: #e7e5e4; padding: 0 0.9rem; border-radius: 9px; cursor: pointer; font-size: 0.82rem; flex-shrink: 0; }
-    @media (max-width: 820px) { .editor { grid-template-columns: 1fr; } .preview { display: none; } }
+    .ckbox { flex-direction: row; align-items: center; gap: 0.5rem; color: #e7e5e4; }
+  .ckbox input { width: auto; padding: 0; }
+  @media (max-width: 820px) { .editor { grid-template-columns: 1fr; } .preview { display: none; } }
 </style>

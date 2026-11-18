@@ -62,3 +62,36 @@ export function iconSvg(key) {
 export function platformName(key) {
   return NAMES[key] || NAMES.link;
 }
+
+
+// ---- logo.dev integration (universal company logos, rendered monochrome, client-cached) ----
+// Paste your logo.dev PUBLISHABLE token here to switch icons over to logo.dev.
+// While empty, the built-in monochrome SVG icons above are used instead.
+export const LOGODEV_TOKEN = "pk_SN0HyWIVTgO-RFMkzgftzA";
+
+const PLATFORM_DOMAIN = {
+  discord: "discord.com", x: "x.com", instagram: "instagram.com", youtube: "youtube.com",
+  tiktok: "tiktok.com", github: "github.com", spotify: "spotify.com", twitch: "twitch.tv",
+  telegram: "telegram.org", reddit: "reddit.com", linkedin: "linkedin.com", facebook: "facebook.com",
+  steam: "steampowered.com", pinterest: "pinterest.com",
+};
+
+// Best-effort domain for a link: the URL's host, else a known platform's domain. "" when none.
+export function linkDomain(link) {
+  const url = String(link?.url || "").trim();
+  if (url) {
+    try {
+      const u = new URL(url.includes("://") ? url : "https://" + url);
+      const h = u.hostname.replace(/^www\./, "");
+      if (h && h.includes(".")) return h;
+    } catch {}
+  }
+  const key = detectPlatform(link);
+  return PLATFORM_DOMAIN[key] || "";
+}
+
+export function logoDevUrl(domain, token) {
+  return "https://img.logo.dev/" + encodeURIComponent(domain) +
+    "?token=" + encodeURIComponent(token || "") +
+    "&format=png&size=80&retina=true&fallback=404";
+}
