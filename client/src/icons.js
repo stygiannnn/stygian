@@ -67,7 +67,7 @@ export function platformName(key) {
 // ---- logo.dev integration (universal company logos, rendered monochrome, client-cached) ----
 // Paste your logo.dev PUBLISHABLE token here to switch icons over to logo.dev.
 // While empty, the built-in monochrome SVG icons above are used instead.
-export const LOGODEV_TOKEN = "pk_SN0HyWIVTgO-RFMkzgftzA";
+export const BRANDFETCH_CLIENT_ID = "1id4_B3zNGE2JPT6zF0";
 
 const PLATFORM_DOMAIN = {
   discord: "discord.com", x: "x.com", instagram: "instagram.com", youtube: "youtube.com",
@@ -90,8 +90,8 @@ export function linkDomain(link) {
   return PLATFORM_DOMAIN[key] || "";
 }
 
-export function logoDevUrl(domain, token) {
-  return "https://img.logo.dev/" + encodeURIComponent(domain) +
-    "?token=" + encodeURIComponent(token || "") +
-    "&format=png&theme=dark&greyscale=true&size=80&retina=true&fallback=404";
+export function brandfetchUrl(domain, clientId) {
+  // symbol + theme=light => a light (monochrome-ish) mark on transparent, for dark UIs
+  return "https://cdn.brandfetch.io/domain/" + encodeURIComponent(domain) +
+    "/w/80/h/80/theme/light/fallback/404/symbol?c=" + encodeURIComponent(clientId || "");
 }

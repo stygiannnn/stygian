@@ -1,5 +1,5 @@
 <script>
-  import { detectPlatform, iconSvg, platformName, linkDomain, logoDevUrl, LOGODEV_TOKEN } from "./icons.js";
+  import { detectPlatform, iconSvg, platformName, linkDomain, brandfetchUrl, BRANDFETCH_CLIENT_ID } from "./icons.js";
 
   let { profile, preview = false } = $props();
 
@@ -46,10 +46,10 @@
   function logoCache(node, domain) {
     function apply(d) {
       if (!d) { node.src = FALLBACK_LOGO; return; }
-      const key = "sl:" + d;
+      const key = "bf:" + d;
       let cached = null;
       try { cached = localStorage.getItem(key); } catch {}
-      const live = logoDevUrl(d, LOGODEV_TOKEN);
+      const live = brandfetchUrl(d, BRANDFETCH_CLIENT_ID);
       node.onerror = () => { node.onerror = null; node.src = FALLBACK_LOGO; };
       node.src = cached || live;
       if (!cached) {
@@ -148,7 +148,7 @@
                 {@const s = statFor(key)}
                 {@const dom = linkDomain(link)}
                 <a class="link" href={safeUrl(link.url)} target="_blank" rel="noopener noreferrer nofollow">
-                  <span class="ico">{#if LOGODEV_TOKEN && dom}<img class="logo" use:logoCache={dom} alt="" />{:else}{@html iconSvg(key)}{/if}</span>
+                  <span class="ico">{#if BRANDFETCH_CLIENT_ID && dom}<img class="logo" use:logoCache={dom} alt="" />{:else}{@html iconSvg(key)}{/if}</span>
                   <span class="meta">
                     <span class="lbl">{link.label || platformName(key)}</span>
                     {#if s && (s.followers != null || s.likes != null)}
@@ -176,7 +176,7 @@
               {@const s = statFor(key)}
               {@const dom = linkDomain(link)}
               <a class="link" href={safeUrl(link.url)} target="_blank" rel="noopener noreferrer nofollow">
-                <span class="ico">{#if LOGODEV_TOKEN && dom}<img class="logo" use:logoCache={dom} alt="" />{:else}{@html iconSvg(key)}{/if}</span>
+                <span class="ico">{#if BRANDFETCH_CLIENT_ID && dom}<img class="logo" use:logoCache={dom} alt="" />{:else}{@html iconSvg(key)}{/if}</span>
                 <span class="meta">
                   <span class="lbl">{link.label || platformName(key)}</span>
                   {#if s && (s.followers != null || s.likes != null)}
@@ -200,7 +200,7 @@
         {/if}
       </div>
     {/if}
-    {#if LOGODEV_TOKEN}<a class="credit" href="https://logo.dev" target="_blank" rel="noopener noreferrer">Icon credits · logo.dev</a>{/if}
+    {#if BRANDFETCH_CLIENT_ID}<a class="credit" href="https://brandfetch.com" target="_blank" rel="noopener noreferrer">Logos · Brandfetch</a>{/if}
   </div>
 {/if}
 
