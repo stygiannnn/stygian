@@ -241,7 +241,7 @@
   .link { display: flex; align-items: center; gap: 0.7rem; padding: 0.8rem 1rem; border-radius: 12px; background: rgba(255,255,255,0.06); color: var(--text); text-decoration: none; font-weight: 600; border: 1px solid rgba(255,255,255,0.1); transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease; }
   .link:hover { transform: translateY(-2px); background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.22); }
   .link .ico { display: inline-flex; align-items: center; flex-shrink: 0; opacity: 0.95; }
-  .link .logo { width: 18px; height: 18px; object-fit: contain;}
+  .link .logo { width: 18px; height: 18px; object-fit: contain; filter: brightness(1); }
   .link .meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
   .link .lbl { display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .link .stat { font-size: 0.72rem; opacity: 0.6; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
