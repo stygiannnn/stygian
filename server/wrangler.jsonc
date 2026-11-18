@@ -13,5 +13,14 @@
       "database_name": "stygian-db",
       "database_id": "168b0c5a-e64b-4f5f-bee0-051b434cfbad"
     }
-  ]
+  ],
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "stygian-uploads"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 * * * *"]
+  }
 }

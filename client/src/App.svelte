@@ -1,6 +1,7 @@
 <script>
   import Profile from "./Profile.svelte";
   import Editor from "./Editor.svelte";
+  import Uploads from "./Uploads.svelte";
 
   let view = $state("loading"); // loading | public | notfound | landing | signup | verify | login | dashboard | editor
   let user = $state(null);
@@ -105,6 +106,9 @@
 {:else if view === "editor"}
   <Editor {user} onClose={() => (view = "dashboard")} />
 
+{:else if view === "uploads"}
+  <Uploads onClose={() => (view = "dashboard")} />
+
 {:else if view === "notfound"}
   <main><div class="card"><h1>stygian</h1><p class="tag">no one here by that name.</p><a class="link" href="/">← home</a></div></main>
 
@@ -155,6 +159,7 @@
         <p class="tag">signed in as <strong>@{user.username}</strong></p>
         <div class="row">
           <button onclick={() => go("editor")}>Edit my page</button>
+          <button onclick={() => go("uploads")}>Upload files</button>
           <a class="btnlink" href={"/" + user.username} target="_blank" rel="noopener">View my page ↗</a>
           <button class="ghost" onclick={doLogout}>Log out</button>
         </div>

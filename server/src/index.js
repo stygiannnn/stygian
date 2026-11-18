@@ -8,6 +8,13 @@ const SESSION_TTL = 60 * 60 * 24 * 30; // 30 days (seconds)
 const CODE_TTL = 60 * 15; // 15 minutes (seconds)
 const MAX_CODE_ATTEMPTS = 5;
 const MAX_CONFIG_BYTES = 20000;
+const MAX_UPLOAD = 20 * 1024 * 1024; // 20 MB
+const UPLOAD_TTL = 60 * 60 * 24; // 24 hours (seconds)
+const EXT_BY_TYPE = {
+  "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/gif": "gif",
+  "image/webp": "webp", "image/avif": "avif",
+  "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov",
+};
 
 export default {
   async fetch(request, env) {
@@ -20,7 +27,18 @@ export default {
         return json({ ok: false, error: "server_error" }, 500);
       }
     }
+    if (url.pathname.startsWith("/f/")) {
+      try {
+        return await serveUpload(url.pathname.slice("/f/".length), request, env);
+      } catch (err) {
+        console.error("serve error", err);
+        return new Response("Error", { status: 500 });
+      }
+    }
     return env.ASSETS.fetch(request);
+  },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(cleanupExpiredUploads(env));
   },
 };
 
@@ -45,6 +63,10 @@ async function handleApi(url, request, env) {
   if (p.startsWith("/api/oauth/") && m === "GET") return oauthRoute(p, url, request, env);
   if (p === "/api/me/social" && m === "GET") return mySocial(request, env);
   if (p.startsWith("/api/me/social/") && p.endsWith("/disconnect") && m === "POST") return disconnectSocial(p, request, env);
+
+  if (p === "/api/uploads" && m === "POST") return createUpload(request, env);
+  if (p === "/api/me/uploads" && m === "GET") return myUploads(request, env);
+  if (p.startsWith("/api/uploads/") && m === "DELETE") return deleteUpload(p, request, env);
 
   return json({ ok: false, error: "not_found" }, 404);
 }
@@ -350,4 +372,126 @@ async function disconnectSocial(p, request, env) {
   const platform = p.split("/")[4];
   await env.DB.prepare("DELETE FROM social_connections WHERE user_id = ? AND platform = ?").bind(user.id, platform).run();
   return json({ ok: true });
+}
+
+// ---------- uploads (temporary image / gif / video host) ----------
+function shortId(n = 8) {
+  const alpha = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const r = crypto.getRandomValues(new Uint8Array(n));
+  let out = "";
+  for (let i = 0; i < n; i++) out += alpha[r[i] % alpha.length];
+  return out;
+}
+
+async function createUpload(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+  if (!user.email_verified) return json({ ok: false, error: "not_verified" }, 403);
+  if (!env.UPLOADS) return json({ ok: false, error: "uploads_unavailable" }, 503);
+
+  const ct = (request.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
+  const ext = EXT_BY_TYPE[ct];
+  if (!ext) return json({ ok: false, error: "unsupported_type" }, 415);
+
+  const len = Number(request.headers.get("Content-Length") || 0);
+  if (!len) return json({ ok: false, error: "missing_length" }, 411);
+  if (len > MAX_UPLOAD) return json({ ok: false, error: "too_large" }, 413);
+  if (!request.body) return json({ ok: false, error: "empty" }, 400);
+
+  const id = shortId(8);
+  const key = id + "." + ext;
+  await env.UPLOADS.put(key, request.body, { httpMetadata: { contentType: ct } });
+
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = now + UPLOAD_TTL;
+  let filename = request.headers.get("X-Filename") || "";
+  try { filename = decodeURIComponent(filename); } catch {}
+  filename = String(filename).slice(0, 200);
+
+  await env.DB.prepare(
+    "INSERT INTO uploads (id, user_id, r2_key, filename, content_type, ext, size, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).bind(id, user.id, key, filename, ct, ext, len, now, expiresAt).run();
+
+  const base = baseUrl(env);
+  return json({ ok: true, id, url: base + "/f/" + id + "." + ext, expiresAt, size: len });
+}
+
+async function myUploads(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+  const now = Math.floor(Date.now() / 1000);
+  const res = await env.DB.prepare(
+    "SELECT id, filename, content_type, ext, size, created_at, expires_at FROM uploads WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC"
+  ).bind(user.id, now).all();
+  const base = baseUrl(env);
+  const uploads = (res.results || []).map((r) => ({
+    id: r.id, url: base + "/f/" + r.id + "." + r.ext, filename: r.filename,
+    contentType: r.content_type, size: r.size, createdAt: r.created_at, expiresAt: r.expires_at,
+  }));
+  return json({ ok: true, uploads });
+}
+
+async function deleteUpload(p, request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+  const id = p.split("/")[3];
+  const row = await env.DB.prepare("SELECT r2_key FROM uploads WHERE id = ? AND user_id = ?").bind(id, user.id).first();
+  if (row) {
+    if (env.UPLOADS) { try { await env.UPLOADS.delete(row.r2_key); } catch (e) { console.error("r2 delete", e); } }
+    await env.DB.prepare("DELETE FROM uploads WHERE id = ? AND user_id = ?").bind(id, user.id).run();
+  }
+  return json({ ok: true });
+}
+
+async function serveUpload(idExt, request, env) {
+  const id = String(idExt || "").split("/")[0].split(".")[0];
+  if (!id || !env.UPLOADS) return new Response("Not found", { status: 404 });
+  const row = await env.DB.prepare("SELECT r2_key, content_type, size, expires_at FROM uploads WHERE id = ?").bind(id).first();
+  const now = Math.floor(Date.now() / 1000);
+  if (!row || row.expires_at < now) return new Response("Not found or expired", { status: 404 });
+
+  const ct = row.content_type || "application/octet-stream";
+  const headers = new Headers();
+  headers.set("Content-Type", ct);
+  headers.set("Cache-Control", "public, max-age=3600");
+  headers.set("Accept-Ranges", "bytes");
+  headers.set("Content-Disposition", "inline");
+
+  const rangeHeader = request.headers.get("Range");
+  if (rangeHeader) {
+    const mm = /bytes=(\d*)-(\d*)/.exec(rangeHeader);
+    if (mm) {
+      const total = row.size;
+      let start = mm[1] ? parseInt(mm[1], 10) : 0;
+      let end = mm[2] ? parseInt(mm[2], 10) : total - 1;
+      if (isNaN(start)) start = 0;
+      if (isNaN(end) || end >= total) end = total - 1;
+      if (start > end || start >= total) {
+        return new Response("Range Not Satisfiable", { status: 416, headers: { "Content-Range": "bytes */" + total } });
+      }
+      const length = end - start + 1;
+      const obj = await env.UPLOADS.get(row.r2_key, { range: { offset: start, length } });
+      if (!obj) return new Response("Not found", { status: 404 });
+      headers.set("Content-Range", "bytes " + start + "-" + end + "/" + total);
+      headers.set("Content-Length", String(length));
+      return new Response(obj.body, { status: 206, headers });
+    }
+  }
+
+  const obj = await env.UPLOADS.get(row.r2_key);
+  if (!obj) return new Response("Not found", { status: 404 });
+  headers.set("Content-Length", String(row.size));
+  return new Response(obj.body, { status: 200, headers });
+}
+
+async function cleanupExpiredUploads(env) {
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    const res = await env.DB.prepare("SELECT id, r2_key FROM uploads WHERE expires_at < ? LIMIT 1000").bind(now).all();
+    const rows = res.results || [];
+    if (env.UPLOADS) {
+      for (const r of rows) { try { await env.UPLOADS.delete(r.r2_key); } catch (e) { console.error("cron r2 delete", e); } }
+    }
+    if (rows.length) await env.DB.prepare("DELETE FROM uploads WHERE expires_at < ?").bind(now).run();
+  } catch (e) { console.error("cleanup", e); }
 }
