@@ -237,7 +237,14 @@
           <div class="link-row" draggable="true" ondragstart={() => (dragIndex = i)} ondragover={(e) => e.preventDefault()} ondrop={() => onDrop(i)}>
             <span class="grip" title="Drag to reorder">⠿</span>
             <input bind:value={link.label} placeholder="Label (optional)" />
-            <input bind:value={link.url} placeholder="https://…" />
+            <div class="urlfield">
+              <span class="scheme">https://</span>
+              <input
+                class="urlpart"
+                value={(link.url || "").replace(/^https?:\/\//i, "")}
+                oninput={(e) => { const r = e.currentTarget.value.replace(/^https?:\/\//i, ""); link.url = r ? "https://" + r : ""; }}
+                placeholder="x.com" />
+            </div>
             <button class="del" onclick={() => removeLink(i)} aria-label="Remove">✕</button>
           </div>
         {/each}
@@ -308,6 +315,10 @@
   .links { display: flex; flex-direction: column; gap: 0.5rem; }
   .link-row { display: flex; gap: 0.4rem; align-items: center; background: #111113; padding: 0.4rem; border-radius: 9px; border: 1px solid #1f1f23; }
   .link-row input { flex: 1; min-width: 0; }
+  .urlfield { flex: 1; min-width: 0; display: flex; align-items: center; background: #111113; border: 1px solid #27272a; border-radius: 9px; padding: 0 0.7rem; }
+  .urlfield:focus-within { border-color: #6366f1; }
+  .urlfield .scheme { color: #6b7280; font-size: 0.88rem; user-select: none; white-space: nowrap; flex-shrink: 0; }
+  .urlfield .urlpart { flex: 1; min-width: 0; border: none; background: transparent; padding: 0.55rem 0 0.55rem 0.1rem; border-radius: 0; }
   .grip { cursor: grab; color: #52525b; padding: 0 0.2rem; user-select: none; }
   .del { background: none; border: none; color: #71717a; cursor: pointer; }
   .del:hover { color: #f87171; }
