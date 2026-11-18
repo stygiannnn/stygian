@@ -23,7 +23,7 @@ const NAMES = {
   discord: "Discord", x: "X", instagram: "Instagram", youtube: "YouTube",
   tiktok: "TikTok", github: "GitHub", spotify: "Spotify", twitch: "Twitch",
   telegram: "Telegram", reddit: "Reddit", linkedin: "LinkedIn", facebook: "Facebook",
-  steam: "Steam", pinterest: "Pinterest", email: "Email", link: "Link",
+  steam: "Steam", pinterest: "Pinterest", roblox: "Roblox", epicgames: "Epic Games", email: "Email", link: "Link",
 };
 
 const MATCHERS = [
@@ -39,6 +39,8 @@ const MATCHERS = [
   ["linkedin", /linkedin\.com|lnkd\.in|\blinkedin\b/],
   ["facebook", /facebook\.com|\bfb\.(com|me)\b|\bfacebook\b/],
   ["steam", /steam(community|powered)\.com|\bsteam\b/],
+  ["roblox", /roblox\.com|\broblox\b/],
+  ["epicgames", /epicgames\.(com|net)|\bepic ?games\b/],
   ["pinterest", /pinterest\.(com|ca|co\.uk|fr|de|com\.au)|pin\.it|\bpinterest\b/],
   ["email", /^mailto:|\be-?mail\b/],
   ["x", /twitter\.com|\/\/x\.com|\bx\.com\b|\btwitter\b|\btweet\b/],
