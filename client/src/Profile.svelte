@@ -85,8 +85,8 @@
     return b ? `background-image:url('${b}');` : "display:none;";
   }
   function cardSizeStyle() {
-    const w = Math.min(600, Math.max(340, Number(theme.card?.width) || 440));
-    return `width:min(${w}px,94vw);`;
+    const sc = Math.min(140, Math.max(70, Number(theme.card?.scale) || 100)) / 100;
+    return `zoom:${sc};`;
   }
 
   function enter() { entered = true; if (audioEl) audioEl.play().catch(() => {}); }
