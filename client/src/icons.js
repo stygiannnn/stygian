@@ -93,5 +93,5 @@ export function linkDomain(link) {
 export function logoDevUrl(domain, token) {
   return "https://img.logo.dev/" + encodeURIComponent(domain) +
     "?token=" + encodeURIComponent(token || "") +
-    "&format=png&size=80&retina=true&fallback=404";
+    "&format=png&theme=dark&greyscale=true&size=80&retina=true&fallback=404";
 }
