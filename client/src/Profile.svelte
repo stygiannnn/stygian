@@ -84,6 +84,10 @@
     const b = safeUrl(cfg.banner);
     return b ? `background-image:url('${b}');` : "display:none;";
   }
+  function cardSizeStyle() {
+    const w = Math.min(600, Math.max(340, Number(theme.card?.width) || 440));
+    return `width:min(${w}px,94vw);`;
+  }
 
   function enter() { entered = true; if (audioEl) audioEl.play().catch(() => {}); }
 </script>
@@ -96,7 +100,7 @@
     {/if}
 
     {#if layout === "banner"}
-      <div class="card">
+      <div class="card" style={cardSizeStyle()}>
         <div class="cardbg" style={cardBgStyle()}></div>
         <div class="cardtint" style={tintStyle()}></div>
         <div class="bannerimg" style={safeUrl(cfg.banner) ? `background-image:url('${safeUrl(cfg.banner)}')` : "background:rgba(255,255,255,0.03)"}></div>

@@ -23,7 +23,7 @@
           bgImage: "",
           text: "#e7e5e4",
           cursor: "",
-          card: { mode: "gradient", color: "#111117", from: "#1b1b2e", to: "#111117", angle: 135 },
+          card: { mode: "gradient", color: "#111117", from: "#1b1b2e", to: "#111117", angle: 135, width: 440 },
           name: { effect: "gradient", color: "#ffffff", from: "#8b5cf6", to: "#ec4899" },
         },
         urlStyle: "plain",
@@ -60,7 +60,7 @@
               bgImage: t.bgImage || "",
               text: t.text || base.text,
               cursor: t.cursor || "",
-              card: { mode: t.card?.mode === "color" ? "color" : "gradient", color: t.card?.color || base.card.color, from: t.card?.from || base.card.from, to: t.card?.to || base.card.to, angle: t.card?.angle ?? 135 },
+              card: { mode: t.card?.mode === "color" ? "color" : "gradient", color: t.card?.color || base.card.color, from: t.card?.from || base.card.from, to: t.card?.to || base.card.to, angle: t.card?.angle ?? 135, width: Math.min(600, Math.max(340, Number(t.card?.width) || 440)) },
               name,
             },
             urlStyle: c.urlStyle === "at" ? "at" : "plain",
@@ -195,6 +195,8 @@
           </div>
           <label>Angle: {data.config.theme.card.angle}°<input type="range" min="0" max="360" bind:value={data.config.theme.card.angle} /></label>
         {/if}
+        <div class="section">Card size</div>
+        <label>Width: {data.config.theme.card.width}px<input type="range" min="340" max="600" bind:value={data.config.theme.card.width} /></label>
       {:else}
         <div class="seg sm">
           <button class:on={data.config.theme.bgMode === "color"} onclick={() => (data.config.theme.bgMode = "color")}>Color</button>

@@ -17,6 +17,29 @@
   let code = $state("");
   let pendingEmail = $state("");
 
+  const TURNSTILE_SITE_KEY = ""; // paste your Cloudflare Turnstile site key here to enable the signup captcha
+  let turnstileToken = $state("");
+  let turnstileEl = $state(null);
+  let turnstileWidget = null;
+  function renderTurnstile() {
+    if (!TURNSTILE_SITE_KEY || !turnstileEl || turnstileWidget !== null) return;
+    if (!window.turnstile) { setTimeout(renderTurnstile, 200); return; }
+    turnstileWidget = window.turnstile.render(turnstileEl, {
+      sitekey: TURNSTILE_SITE_KEY,
+      callback: (t) => (turnstileToken = t),
+      "expired-callback": () => (turnstileToken = ""),
+      "error-callback": () => (turnstileToken = ""),
+    });
+  }
+  function resetTurnstile() {
+    turnstileToken = "";
+    if (TURNSTILE_SITE_KEY && window.turnstile && turnstileWidget !== null) { try { window.turnstile.reset(turnstileWidget); } catch {} }
+  }
+  $effect(() => {
+    if (view === "signup") { if (turnstileEl) renderTurnstile(); }
+    else { turnstileWidget = null; turnstileToken = ""; }
+  });
+
   const routeMatch = decodeURIComponent(window.location.pathname).match(/^\/@?([a-zA-Z0-9_-]{3,20})$/);
 
   const ERRORS = {
@@ -34,6 +57,7 @@
     code_expired: "That code expired. Request a new one.",
     too_many_attempts: "Too many attempts. Request a new code.",
     invalid_input: "Please check your details and try again.",
+    captcha_failed: "Captcha check failed. Please try again.",
     server_error: "Something went wrong. Try again.",
   };
   const msg = (e) => ERRORS[e] || "Something went wrong.";
@@ -69,11 +93,13 @@
   function go(v) { error = ""; view = v; }
 
   async function doSignup(e) {
-    e.preventDefault(); error = ""; busy = true;
-    const r = await api("/api/auth/signup", { email, username, displayName, password });
+    e.preventDefault(); error = "";
+    if (TURNSTILE_SITE_KEY && !turnstileToken) { error = "Please complete the captcha."; return; }
+    busy = true;
+    const r = await api("/api/auth/signup", { email, username, displayName, password, turnstileToken });
     busy = false;
-    if (r.ok) { pendingEmail = r.email; code = ""; view = "verify"; }
-    else error = msg(r.error);
+    if (r.ok) { pendingEmail = r.email; code = ""; view = "verify"; resetTurnstile(); }
+    else { error = msg(r.error); resetTurnstile(); }
   }
   async function doVerify(e) {
     e.preventDefault(); error = ""; busy = true;
@@ -134,6 +160,7 @@
           <input type="text" placeholder="username (permanent)" bind:value={username} autocomplete="username" />
           <input type="text" placeholder="display name (optional)" bind:value={displayName} maxlength="60" />
           <input type="password" placeholder="password (8+ chars)" bind:value={password} autocomplete="new-password" />
+          {#if TURNSTILE_SITE_KEY}<div bind:this={turnstileEl} class="turnstile"></div>{/if}
           <button type="submit" disabled={busy}>{busy ? "…" : "Sign up"}</button>
         </form>
         <button class="link" onclick={() => go("login")}>Already have an account? Log in</button>

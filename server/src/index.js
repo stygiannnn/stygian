@@ -81,6 +81,21 @@ function json(obj, status = 200, headers = {}) {
 async function body(request) {
   try { return await request.json(); } catch { return {}; }
 }
+
+async function verifyTurnstile(token, request, env) {
+  if (!env.TURNSTILE_SECRET_KEY) return true; // captcha not configured -> allow
+  if (!token) return false;
+  const form = new URLSearchParams();
+  form.set("secret", env.TURNSTILE_SECRET_KEY);
+  form.set("response", String(token));
+  const ip = request.headers.get("CF-Connecting-IP");
+  if (ip) form.set("remoteip", ip);
+  try {
+    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: form });
+    const d = await r.json();
+    return !!d.success;
+  } catch (err) { console.error("turnstile", err); return false; }
+}
 function validEmail(e) {
   return typeof e === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length <= 254;
 }
@@ -126,7 +141,8 @@ function publicUser(u) {
 
 // ---------- auth ----------
 async function signup(request, env) {
-  const { email, username, displayName, password } = await body(request);
+  const { email, username, displayName, password, turnstileToken } = await body(request);
+  if (!(await verifyTurnstile(turnstileToken, request, env))) return json({ ok: false, error: "captcha_failed" }, 400);
   const e = String(email || "").trim().toLowerCase();
   const u = String(username || "").trim();
   const dn = String(displayName || "").trim();
