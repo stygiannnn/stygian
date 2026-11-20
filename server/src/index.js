@@ -71,6 +71,8 @@ async function handleApi(url, request, env) {
   if (p === "/api/me/uploads" && m === "GET") return myUploads(request, env);
   if (p.startsWith("/api/uploads/") && m === "DELETE") return deleteUpload(p, request, env);
 
+  if (p === "/api/cursors" && m === "GET") return listCursors(request, env);
+
   return json({ ok: false, error: "not_found" }, 404);
 }
 
@@ -418,6 +420,31 @@ async function disconnectSocial(p, request, env) {
   const platform = p.split("/")[4];
   await env.DB.prepare("DELETE FROM social_connections WHERE user_id = ? AND platform = ?").bind(user.id, platform).run();
   return json({ ok: true });
+}
+
+// ---------- cursor catalog (proxied + edge-cached; images load client-side only) ----------
+async function listCursors(request, env) {
+  // Thin passthrough of custom-cursor.com's catalog. We stream the JSON (no parse,
+  // no storage) and let Cloudflare's edge cache it for a day. The client trims the
+  // list and caches it in localStorage; cursor images are hotlinked straight from
+  // the CDN to each viewer's browser, so our server never touches an image.
+  try {
+    const upstream = await fetch("https://custom-cursor.com/api/cursors/1/100/all", {
+      cf: { cacheTtl: 86400, cacheEverything: true },
+      headers: { Accept: "application/json", "User-Agent": "stygian.wtf cursor picker" },
+    });
+    if (!upstream.ok) return json({ ok: false, error: "cursor_fetch_failed" }, 502);
+    return new Response(upstream.body, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "public, max-age=86400",
+      },
+    });
+  } catch (e) {
+    console.error("cursors", e);
+    return json({ ok: false, error: "cursor_fetch_failed" }, 502);
+  }
 }
 
 // ---------- uploads (temporary image / gif / video host) ----------

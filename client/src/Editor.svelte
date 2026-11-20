@@ -8,6 +8,9 @@
   let dragIndex = $state(-1);
   let socials = $state([]);
   let socialBusy = $state("");
+  let cursorList = $state([]);
+  let cursorLoading = $state(false);
+  let cursorErr = $state("");
 
   let data = $state(defaults());
 
@@ -129,6 +132,34 @@
     try { const r = await fetch("/api/me/social"); const d = await r.json(); if (d.ok) socials = d.socials; } catch {}
   }
   loadSocials();
+
+  function curUrl() {
+    const c = data.config.theme.cursor;
+    return typeof c === "string" ? c : (c && c.url) || "";
+  }
+  async function loadCursors() {
+    const KEY = "stygian:cursorlist:v1";
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) {
+        const o = JSON.parse(raw);
+        if (o && o.t && Date.now() - o.t < 7 * 864e5 && Array.isArray(o.list) && o.list.length) { cursorList = o.list; return; }
+      }
+    } catch {}
+    cursorLoading = true; cursorErr = "";
+    try {
+      const r = await fetch("/api/cursors");
+      const d = await r.json();
+      const list = (Array.isArray(d && d.cursors) ? d.cursors : []).slice(0, 150)
+        .map((c) => ({ id: c.id, name: c.name, path: c.path, image: c.image || c.path, x: c.offsetX | 0, y: c.offsetY | 0 }))
+        .filter((c) => c.path);
+      cursorList = list;
+      if (list.length) { try { localStorage.setItem(KEY, JSON.stringify({ t: Date.now(), list })); } catch {} }
+      else cursorErr = "Couldn't load cursors right now.";
+    } catch { cursorErr = "Couldn't load cursors right now."; }
+    cursorLoading = false;
+  }
+  loadCursors();
   function connected(pf) { return socials.find((x) => x.platform === pf); }
   function connectSocial(pf) { window.location.href = "/api/oauth/" + pf + "/start"; }
   async function disconnectSocial(pf) {
@@ -227,7 +258,18 @@
         {/if}
       {/if}
 
-      <label>Custom cursor image URL (PNG, ≤128px)<input bind:value={data.config.theme.cursor} placeholder="https://…png" /></label>
+      <div class="section">Cursor</div>
+      <p class="hint">Pick the cursor visitors see on your profile. Images load from the cursor CDN straight to each visitor's browser and cache there — nothing is stored on our side.</p>
+      {#if cursorLoading}<p class="dim small">Loading cursors…</p>{/if}
+      {#if cursorErr}<p class="msg err">{cursorErr}</p>{/if}
+      <div class="cursorpick">
+        <button type="button" class="curopt none {curUrl() ? '' : 'on'}" onclick={() => (data.config.theme.cursor = "")} title="Default cursor">Default</button>
+        {#each cursorList as c (c.id)}
+          <button type="button" class="curopt {curUrl() === c.path ? 'on' : ''}" onclick={() => (data.config.theme.cursor = { url: c.path, x: c.x, y: c.y })} title={c.name}>
+            <img src={c.image} alt="" loading="lazy" />
+          </button>
+        {/each}
+      </div>
 
       <div class="section">Links <button class="add" onclick={addLink}>+ Add</button></div>
       <p class="hint">Icons are detected automatically — type "discord", a Twitter link, etc. Up to {MAX_LINKS} links.</p>
@@ -323,6 +365,11 @@
   .del { background: none; border: none; color: #71717a; cursor: pointer; }
   .del:hover { color: #f87171; }
   .hint { font-size: 0.72rem; color: #71717a; margin: 0; }
+  .cursorpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 0.4rem; max-height: 260px; overflow-y: auto; padding: 0.5rem; background: #0e0e11; border: 1px solid #1f1f23; border-radius: 10px; }
+  .curopt { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: #17171b; border: 1px solid #27272a; border-radius: 8px; cursor: pointer; padding: 4px; overflow: hidden; }
+  .curopt img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .curopt.on { border-color: #6366f1; box-shadow: 0 0 0 1px #6366f1; }
+  .curopt.none { font-size: 0.6rem; color: #a1a1aa; text-transform: none; letter-spacing: 0; line-height: 1.1; }
   .save { background: #6366f1; border: none; color: #fff; padding: 0.75rem; border-radius: 10px; font-weight: 600; cursor: pointer; margin-top: 0.8rem; }
   .save:disabled { opacity: 0.6; }
   .msg { text-align: center; color: #4ade80; font-size: 0.85rem; margin: 0; }

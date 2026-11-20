@@ -96,8 +96,14 @@
         s += `background-color:${t.bg || "#0a0a0f"};`;
       }
     }
-    const cur = safeUrl(t.cursor);
-    if (cur) s += `cursor:url('${cur}'),auto;`;
+    const cRaw = t.cursor;
+    const cUrl = typeof cRaw === "string" ? cRaw : (cRaw && cRaw.url) || "";
+    const cur = safeUrl(cUrl);
+    if (cur) {
+      const cx = cRaw && typeof cRaw === "object" && Number.isFinite(cRaw.x) ? cRaw.x : 0;
+      const cy = cRaw && typeof cRaw === "object" && Number.isFinite(cRaw.y) ? cRaw.y : 0;
+      s += `cursor:url('${cur}') ${cx} ${cy},auto;`;
+    }
     return s;
   }
 
