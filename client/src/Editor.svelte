@@ -365,7 +365,7 @@
   .del { background: none; border: none; color: #71717a; cursor: pointer; }
   .del:hover { color: #f87171; }
   .hint { font-size: 0.72rem; color: #71717a; margin: 0; }
-  .cursorpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 0.5rem; max-height: 320px; overflow-y: auto; padding: 0.6rem; background: #0e0e11; border: 1px solid #1f1f23; border-radius: 10px; }
+  .cursorpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 0.5rem; max-height: 360px; flex-shrink: 0; overflow-y: auto; padding: 0.6rem; background: #0e0e11; border: 1px solid #1f1f23; border-radius: 10px; }
   .curopt { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: #1c1c22; border: 1px solid #27272a; border-radius: 8px; cursor: pointer; padding: 8px; overflow: hidden; }
   .curopt img { width: 100%; height: 100%; object-fit: contain; image-rendering: auto; }
   .curopt.on { border-color: #6366f1; box-shadow: 0 0 0 1px #6366f1; }
