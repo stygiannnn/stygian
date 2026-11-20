@@ -285,7 +285,6 @@
       </div>
 
       <div class="section">Links <button class="add" onclick={addLink}>+ Add</button></div>
-      <p class="hint">Up to {MAX_LINKS} Social links.</p>
       {#if linkMsg}<p class="msg err">{linkMsg}</p>{/if}
       <div class="links">
         {#each data.config.links as link, i (link.id)}
