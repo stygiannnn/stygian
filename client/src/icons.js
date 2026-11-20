@@ -66,30 +66,26 @@ export function platformName(key) {
 }
 
 
-// ---- logo.dev integration (universal company logos, rendered monochrome, client-cached) ----
-// Paste your logo.dev PUBLISHABLE token here to switch icons over to logo.dev.
-// While empty, the built-in monochrome SVG icons above are used instead.
+// ---- Brandfetch logos (universal company logos, client-cached) ----
+// Paste your Brandfetch client ID here to enable logos. While empty, the built-in SVG icons are used.
 export const BRANDFETCH_CLIENT_ID = "1id4_B3zNGE2JPT6zF0";
 
-const PLATFORM_DOMAIN = {
-  discord: "discord.com", x: "x.com", instagram: "instagram.com", youtube: "youtube.com",
-  tiktok: "tiktok.com", github: "github.com", spotify: "spotify.com", twitch: "twitch.tv",
-  telegram: "telegram.org", reddit: "reddit.com", linkedin: "linkedin.com", facebook: "facebook.com",
-  steam: "steampowered.com", pinterest: "pinterest.com", roblox: "roblox.com", epicgames: "epicgames.com",
-};
-
-// Best-effort domain for a link: the URL's host, else a known platform's domain. "" when none.
+// Domain for a link's logo. A full domain is used as-is; a bare name (no dot) is
+// assumed to be a .com, so ANY company the user types resolves — no platform whitelist.
+// For a brand on another TLD (twitch.tv, telegram.org) the user types the full domain.
 export function linkDomain(link) {
   const url = String(link?.url || "").trim();
-  if (url) {
-    try {
-      const u = new URL(url.includes("://") ? url : "https://" + url);
-      const h = u.hostname.replace(/^www\./, "");
-      if (h && h.includes(".")) return h;
-    } catch {}
+  if (!url || /^mailto:/i.test(url)) return "";
+  try {
+    const u = new URL(url.includes("://") ? url : "https://" + url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    let h = u.hostname.replace(/^www\./, "").toLowerCase();
+    if (!h) return "";
+    if (!h.includes(".")) h += ".com";
+    return h;
+  } catch {
+    return "";
   }
-  const key = detectPlatform(link);
-  return PLATFORM_DOMAIN[key] || "";
 }
 
 export function brandfetchUrl(domain, clientId, type) {
