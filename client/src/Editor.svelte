@@ -266,7 +266,7 @@
       {/if}
 
       <div class="section">Cursor</div>
-      <p class="hint">Pick the cursor visitors see on your profile. Images load from the cursor CDN straight to each visitor's browser and cache there — nothing is stored on our side.</p>
+      <p class="hint">Choose a Cursor for your profile.</p>
       <input class="cursearch" type="search" placeholder="Search cursors…" bind:value={cursorSearch} oninput={() => (cursorShown = 150)} />
       {#if cursorLoading}<p class="dim small">Loading cursors…</p>{/if}
       {#if cursorErr}<p class="msg err">{cursorErr}</p>{/if}
