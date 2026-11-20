@@ -16,6 +16,7 @@
     too_large: "That file is over 20MB.",
     unsupported_type: "Only images, GIFs and videos are allowed.",
     not_verified: "You need a verified email to upload.",
+    daily_limit: "Daily upload limit reached — you can upload 10 files per day. Try again tomorrow.",
     unauthorized: "Please log in again.",
     uploads_unavailable: "Uploads aren't set up yet.",
     missing_length: "Couldn't read that file.",
@@ -82,7 +83,7 @@
     <button class="back" onclick={onClose}>← Back</button>
     <h2>Uploads</h2>
   </div>
-  <p class="sub">Drop an image, GIF or video (max 20MB). Links auto-delete after 24 hours and embed in Discord.</p>
+  <p class="sub">Drop an image, GIF or video (max 20MB). Links auto-delete after 5 hours and embed in Discord.</p>
 
   <div class="drop" class:over={dragOver} class:busy={uploading}
        ondragover={(e) => { e.preventDefault(); dragOver = true; }}

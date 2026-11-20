@@ -9,7 +9,10 @@ const CODE_TTL = 60 * 15; // 15 minutes (seconds)
 const MAX_CODE_ATTEMPTS = 5;
 const MAX_CONFIG_BYTES = 20000;
 const MAX_UPLOAD = 20 * 1024 * 1024; // 20 MB
-const UPLOAD_TTL = 60 * 60 * 24; // 24 hours (seconds)
+const UPLOAD_TTL = 60 * 60 * 5; // file lifetime: 5 hours (seconds)
+const UPLOADS_PER_DAY = 10; // max uploads per user per day
+const UPLOAD_LIMIT_WINDOW = 60 * 60 * 24; // rolling window for the daily upload limit (24h)
+let uploadEventsReady = false; // per-isolate cache so the DDL below runs at most once
 const EXT_BY_TYPE = {
   "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/gif": "gif",
   "image/webp": "webp", "image/avif": "avif",
@@ -426,11 +429,31 @@ function shortId(n = 8) {
   return out;
 }
 
+async function ensureUploadEvents(env) {
+  if (uploadEventsReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS upload_events (user_id TEXT NOT NULL, created_at INTEGER NOT NULL)"
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_upload_events_user ON upload_events (user_id, created_at)"
+  ).run();
+  uploadEventsReady = true;
+}
+
 async function createUpload(request, env) {
   const user = await currentUser(request, env);
   if (!user) return json({ ok: false, error: "unauthorized" }, 401);
   if (!user.email_verified) return json({ ok: false, error: "not_verified" }, 403);
   if (!env.UPLOADS) return json({ ok: false, error: "uploads_unavailable" }, 503);
+
+  try {
+    await ensureUploadEvents(env);
+    const since = Math.floor(Date.now() / 1000) - UPLOAD_LIMIT_WINDOW;
+    const used = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM upload_events WHERE user_id = ? AND created_at > ?"
+    ).bind(user.id, since).first();
+    if (used && used.n >= UPLOADS_PER_DAY) return json({ ok: false, error: "daily_limit", limit: UPLOADS_PER_DAY }, 429);
+  } catch (e) { console.error("upload limit check", e); }
 
   const ct = (request.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
   const ext = EXT_BY_TYPE[ct];
@@ -454,6 +477,7 @@ async function createUpload(request, env) {
   await env.DB.prepare(
     "INSERT INTO uploads (id, user_id, r2_key, filename, content_type, ext, size, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).bind(id, user.id, key, filename, ct, ext, len, now, expiresAt).run();
+  try { await env.DB.prepare("INSERT INTO upload_events (user_id, created_at) VALUES (?, ?)").bind(user.id, now).run(); } catch (e) { console.error("upload event insert", e); }
 
   const base = baseUrl(env);
   return json({ ok: true, id, url: base + "/f/" + id + "." + ext, expiresAt, size: len });
@@ -536,5 +560,6 @@ async function cleanupExpiredUploads(env) {
       for (const r of rows) { try { await env.UPLOADS.delete(r.r2_key); } catch (e) { console.error("cron r2 delete", e); } }
     }
     if (rows.length) await env.DB.prepare("DELETE FROM uploads WHERE expires_at < ?").bind(now).run();
+    try { await ensureUploadEvents(env); await env.DB.prepare("DELETE FROM upload_events WHERE created_at < ?").bind(now - UPLOAD_LIMIT_WINDOW).run(); } catch (e) { console.error("cron event prune", e); }
   } catch (e) { console.error("cleanup", e); }
 }

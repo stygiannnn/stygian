@@ -157,7 +157,7 @@
         <p class="tag">create your account</p>
         <form onsubmit={doSignup}>
           <input type="email" placeholder="email" bind:value={email} autocomplete="email" />
-          <input type="text" placeholder="username (permanent)" bind:value={username} autocomplete="username" />
+          <input type="text" placeholder="username (permanent)" bind:value={username} autocomplete="username" maxlength="20" />
           <input type="text" placeholder="display name (optional)" bind:value={displayName} maxlength="60" />
           <input type="password" placeholder="password (8+ chars)" bind:value={password} autocomplete="new-password" />
           {#if TURNSTILE_SITE_KEY}<div bind:this={turnstileEl} class="turnstile"></div>{/if}
