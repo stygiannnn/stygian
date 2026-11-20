@@ -104,7 +104,7 @@
       const ry = cRaw && typeof cRaw === "object" && Number.isFinite(cRaw.y) ? cRaw.y : 0;
       const cx = Math.max(0, Math.min(31, Math.round(rx)));
       const cy = Math.max(0, Math.min(31, Math.round(ry)));
-      s += `cursor:url('${cur}') ${cx} ${cy},auto;`;
+      s += `--cursor:url('${cur}') ${cx} ${cy},auto;`;
     }
     return s;
   }
@@ -228,7 +228,8 @@
 {/if}
 
 <style>
-  .page { position: relative; min-height: 100vh; display: grid; place-items: center; color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; padding: 2.5rem 1rem; }
+  .page { position: relative; min-height: 100vh; display: grid; place-items: center; color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; padding: 2.5rem 1rem; cursor: var(--cursor, auto); }
+  .page a, .page button { cursor: var(--cursor, pointer); }
   .enter { position: fixed; inset: 0; z-index: 10; border: none; background: rgba(0,0,0,0.75); color: #fff; font-size: 1.1rem; letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; backdrop-filter: blur(6px); }
 
   /* banner card (Discord-style) */
