@@ -100,8 +100,10 @@
     const cUrl = typeof cRaw === "string" ? cRaw : (cRaw && cRaw.url) || "";
     const cur = safeUrl(cUrl);
     if (cur) {
-      const cx = cRaw && typeof cRaw === "object" && Number.isFinite(cRaw.x) ? cRaw.x : 0;
-      const cy = cRaw && typeof cRaw === "object" && Number.isFinite(cRaw.y) ? cRaw.y : 0;
+      const rx = cRaw && typeof cRaw === "object" && Number.isFinite(cRaw.x) ? cRaw.x : 0;
+      const ry = cRaw && typeof cRaw === "object" && Number.isFinite(cRaw.y) ? cRaw.y : 0;
+      const cx = Math.max(0, Math.min(31, Math.round(rx)));
+      const cy = Math.max(0, Math.min(31, Math.round(ry)));
       s += `cursor:url('${cur}') ${cx} ${cy},auto;`;
     }
     return s;
