@@ -170,8 +170,10 @@
         </div>
         <div class="body">
           <h1 class="name" style={nameStyle()}>{profile.displayName || "@" + profile.username}{#if verified}<span class="vbadge">{@html badgeSvg()}</span>{/if}</h1>
-          <p class="handle">@{profile.username}</p>
-          {#if shownBadges.length}<div class="badges">{#each shownBadges as b}<span class="badge" data-label={BADGE_DEFS[b].label}>{BADGE_DEFS[b].emoji}</span>{/each}</div>{/if}
+          <div class="idrow">
+            <p class="handle">@{profile.username}</p>
+            {#if shownBadges.length}<div class="badges">{#each shownBadges as b}<span class="badge" data-label={BADGE_DEFS[b].label}>{BADGE_DEFS[b].emoji}</span>{/each}</div>{/if}
+          </div>
           {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
           <div class="links">
             {#each (cfg.links || []) as link}
@@ -255,7 +257,7 @@
   .status::after { width: 6px; height: 6px; left: -8px; top: -21px; }
   .body { position: relative; z-index: 2; padding: 0.7rem 1.25rem 1.5rem; }
   .body .name { font-size: 1.55rem; margin: 0.3rem 0 0.1rem; font-weight: 700; display: inline-block; }
-  .body .handle { color: #9aa0ab; margin: 0 0 0.8rem; font-size: 0.9rem; }
+  .body .handle { color: #9aa0ab; margin: 0; font-size: 0.9rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .body .bio { opacity: 0.85; margin: 0 0 1.2rem; line-height: 1.5; font-size: 0.92rem; }
   .body .links { display: flex; flex-direction: column; gap: 0.6rem; }
   .body .np { color: #9aa0ab; font-size: 0.88rem; margin: 1.2rem 0 0; }
@@ -283,8 +285,9 @@
   .name .vbadge { display: inline-flex; vertical-align: middle; margin-left: 6px; }
   .name :global(.verified) { width: 0.7em; height: 0.7em; color: #1d9bf0; }
   .badges { display: inline-flex; gap: 0.35rem; align-items: center; margin: 0 0 0.6rem; }
-  /* banner: Discord-style badge cluster, top-right of the card body */
-  .body .badges { position: absolute; top: 0.9rem; right: 1.05rem; margin: 0; display: inline-flex; gap: 0.3rem; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.38); border: 1px solid rgba(255,255,255,0.1); border-radius: 11px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 3; }
+  /* banner: Discord-style badge cluster, inline on the handle/pronoun row (right side) */
+  .body .idrow { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin: 0 0 0.8rem; }
+  .body .badges { margin: 0; display: inline-flex; gap: 0.3rem; align-items: center; flex-shrink: 0; padding: 4px 8px; background: rgba(0,0,0,0.38); border: 1px solid rgba(255,255,255,0.1); border-radius: 11px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   /* background: own centered row under the username, status sits beneath it */
   .inner .badges { display: flex; justify-content: center; margin: 0.15rem 0 0.9rem; }
   .badge { position: relative; font-size: 1.05rem; line-height: 1; cursor: default; }
