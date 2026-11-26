@@ -254,7 +254,7 @@ async function publicProfile(usernameRaw, env) {
   const u = decodeURIComponent(usernameRaw || "").toLowerCase();
   if (!validUsername(u)) return json({ ok: false, error: "not_found" }, 404);
   const row = await env.DB.prepare(
-    `SELECT u.id AS uid, u.username, p.display_name, p.bio, p.config
+    `SELECT u.id AS uid, u.username, u.badges, p.display_name, p.bio, p.config
        FROM users u JOIN profiles p ON p.user_id = u.id
       WHERE u.username_lower = ? AND u.email_verified = 1`
   ).bind(u).first();
@@ -262,10 +262,11 @@ async function publicProfile(usernameRaw, env) {
   const socials = await loadPublicSocials(env, row.uid);
   const cfg = parseConfig(row.config);
   const verified = Object.keys(socials).length > 0;
+  const badges = String(row.badges || "").split(",").map((b) => b.trim().toLowerCase()).filter(Boolean);
   let nowPlaying = null;
   if (cfg && cfg.spotifyNowPlaying) nowPlaying = await fetchNowPlaying(env, row.uid);
   return json({ ok: true, profile: {
-    username: row.username, displayName: row.display_name, bio: row.bio, config: cfg, socials, verified, nowPlaying,
+    username: row.username, displayName: row.display_name, bio: row.bio, config: cfg, socials, verified, badges, nowPlaying,
   }});
 }
 async function myProfile(request, env) {

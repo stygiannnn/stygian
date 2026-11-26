@@ -18,6 +18,14 @@
   let musicUrl = $derived(safeUrl(cfg.music?.url));
   let hasAudio = $derived(!!musicUrl && !preview);
   let verified = $derived(!!profile?.verified);
+  let badges = $derived(Array.isArray(profile?.badges) ? profile.badges : []);
+  const BADGE_DEFS = {
+    owner: { emoji: "👑", label: "Owner" },
+    admin: { emoji: "🛡️", label: "Admin" },
+    moderator: { emoji: "🔨", label: "Moderator" },
+  };
+  const BADGE_ORDER = ["owner", "admin", "moderator"];
+  let shownBadges = $derived(BADGE_ORDER.filter((k) => badges.includes(k)));
   let nowPlaying = $derived(profile?.nowPlaying ?? null);
   let socials = $derived(profile?.socials ?? {});
 
@@ -163,6 +171,7 @@
         <div class="body">
           <h1 class="name" style={nameStyle()}>{profile.displayName || "@" + profile.username}{#if verified}<span class="vbadge">{@html badgeSvg()}</span>{/if}</h1>
           <p class="handle">@{profile.username}</p>
+          {#if shownBadges.length}<div class="badges">{#each shownBadges as b}<span class="badge" data-label={BADGE_DEFS[b].label}>{BADGE_DEFS[b].emoji}</span>{/each}</div>{/if}
           {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
           <div class="links">
             {#each (cfg.links || []) as link}
@@ -190,6 +199,7 @@
         {#if safeUrl(cfg.avatar)}<img class="avatar" src={safeUrl(cfg.avatar)} alt="" />{/if}
         <h1 class="name" style={nameStyle()}>{profile.displayName || "@" + profile.username}{#if verified}<span class="vbadge">{@html badgeSvg()}</span>{/if}</h1>
         <p class="handle">@{profile.username}</p>
+        {#if shownBadges.length}<div class="badges">{#each shownBadges as b}<span class="badge" data-label={BADGE_DEFS[b].label}>{BADGE_DEFS[b].emoji}</span>{/each}</div>{/if}
         {#if status}<span class="status center">{status}</span>{/if}
         {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
         <div class="links">
@@ -272,6 +282,11 @@
   .link :global(.verified) { width: 15px; height: 15px; flex-shrink: 0; color: #1d9bf0; }
   .name .vbadge { display: inline-flex; vertical-align: middle; margin-left: 6px; }
   .name :global(.verified) { width: 0.7em; height: 0.7em; color: #1d9bf0; }
+  .badges { display: inline-flex; gap: 0.35rem; align-items: center; margin: 0 0 0.6rem; }
+  .body .badges { margin-top: -0.2rem; }
+  .badge { position: relative; font-size: 1.05rem; line-height: 1; cursor: default; }
+  .badge::after { content: attr(data-label); position: absolute; bottom: 140%; left: 50%; transform: translateX(-50%); background: #111113; border: 1px solid #2a2a30; color: #e7e5e4; font-size: 0.68rem; font-weight: 500; padding: 3px 7px; border-radius: 6px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.12s; z-index: 6; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+  .badge:hover::after { opacity: 1; }
   .nowplaying { margin-top: 1rem; display: flex; align-items: center; gap: 0.6rem; max-width: min(440px, 94vw); background: rgba(23,23,29,0.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 0.5rem 0.75rem; color: #dcddde; font-size: 0.85rem; z-index: 1; }
   .np-art { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
   .np-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
