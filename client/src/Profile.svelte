@@ -286,7 +286,7 @@
   .name :global(.verified) { width: 0.7em; height: 0.7em; color: #1d9bf0; }
   .badges { display: inline-flex; gap: 0.35rem; align-items: center; margin: 0 0 0.6rem; }
   /* banner: Discord-style badge cluster, inline on the handle/pronoun row (right side) */
-  .body .idrow { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin: 0 0 0.8rem; }
+  .body .idrow { display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; margin: 0 0 0.8rem; }
   .body .badges { margin: 0; display: inline-flex; gap: 0.3rem; align-items: center; flex-shrink: 0; padding: 4px 8px; background: rgba(0,0,0,0.38); border: 1px solid rgba(255,255,255,0.1); border-radius: 11px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   /* background: own centered row under the username, status sits beneath it */
   .inner .badges { display: flex; justify-content: center; margin: 0.15rem 0 0.9rem; }
