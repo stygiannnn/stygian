@@ -283,7 +283,10 @@
   .name .vbadge { display: inline-flex; vertical-align: middle; margin-left: 6px; }
   .name :global(.verified) { width: 0.7em; height: 0.7em; color: #1d9bf0; }
   .badges { display: inline-flex; gap: 0.35rem; align-items: center; margin: 0 0 0.6rem; }
-  .body .badges { margin-top: -0.2rem; }
+  /* banner: Discord-style badge cluster, top-right of the card body */
+  .body .badges { position: absolute; top: 0.9rem; right: 1.05rem; margin: 0; display: inline-flex; gap: 0.3rem; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.38); border: 1px solid rgba(255,255,255,0.1); border-radius: 11px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 3; }
+  /* background: own centered row under the username, status sits beneath it */
+  .inner .badges { display: flex; justify-content: center; margin: 0.15rem 0 0.9rem; }
   .badge { position: relative; font-size: 1.05rem; line-height: 1; cursor: default; }
   .badge::after { content: attr(data-label); position: absolute; bottom: 140%; left: 50%; transform: translateX(-50%); background: #111113; border: 1px solid #2a2a30; color: #e7e5e4; font-size: 0.68rem; font-weight: 500; padding: 3px 7px; border-radius: 6px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.12s; z-index: 6; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
   .badge:hover::after { opacity: 1; }
