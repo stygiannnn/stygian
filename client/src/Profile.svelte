@@ -29,6 +29,17 @@
   let nowPlaying = $derived(profile?.nowPlaying ?? null);
   let socials = $derived(profile?.socials ?? {});
 
+  // When a temporary admin override (the "prank") is active, reload once it expires
+  // so the viewer sees the profile return to normal without a manual refresh.
+  $effect(() => {
+    const exp = profile?.overrideExpiresAt;
+    if (!exp || preview) return;
+    const ms = exp * 1000 - Date.now();
+    if (ms <= 0) return;
+    const t = setTimeout(() => { try { location.reload(); } catch {} }, Math.min(ms + 400, 310000));
+    return () => clearTimeout(t);
+  });
+
   function statFor(key) {
     const map = { x: "twitter", tiktok: "tiktok", pinterest: "pinterest" };
     const pk = map[key];
