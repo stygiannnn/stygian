@@ -211,7 +211,6 @@
         <h1 class="name" style={nameStyle()}>{profile.displayName || "@" + profile.username}{#if verified}<span class="vbadge">{@html badgeSvg()}</span>{/if}</h1>
         <p class="handle">@{profile.username}</p>
         {#if shownBadges.length}<div class="badges">{#each shownBadges as b}<span class="badge" data-label={BADGE_DEFS[b].label}>{BADGE_DEFS[b].emoji}</span>{/each}</div>{/if}
-        {#if status}<span class="status center">{status}</span>{/if}
         {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
         <div class="links">
           {#each (cfg.links || []) as link}

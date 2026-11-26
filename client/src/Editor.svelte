@@ -203,7 +203,6 @@
 
       <label>Display name<input bind:value={data.displayName} maxlength="60" placeholder="Your name" /></label>
       <label>Bio<textarea bind:value={data.bio} maxlength="300" rows="3" placeholder="A short bio…"></textarea></label>
-      <label>Status<input bind:value={data.config.status} maxlength="50" placeholder="ribbit 🐸" /></label>
       <label>Avatar image URL<input bind:value={data.config.avatar} placeholder="https://…" /></label>
 
       <div class="section">Display name style</div>
@@ -230,6 +229,7 @@
 
       {#if data.config.layout === "banner"}
         <label>Banner image URL<input bind:value={data.config.banner} placeholder="https://…" /></label>
+        <label>Status<input bind:value={data.config.status} maxlength="50" placeholder="ribbit 🐸" /></label>
         <div class="section">Card theme</div>
         <div class="seg sm">
           <button class:on={data.config.theme.card.mode === "color"} onclick={() => (data.config.theme.card.mode = "color")}>Solid</button>
