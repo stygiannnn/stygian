@@ -42,7 +42,7 @@
         status: "",
         avatar: "",
         links: [],
-        music: { url: "", label: "" },
+        spotifyEmbed: "",
         spotifyNowPlaying: false,
       },
     };
@@ -80,7 +80,7 @@
             status: c.status || "",
             avatar: c.avatar || "",
             links: Array.isArray(c.links) ? c.links.map((l) => ({ id: l.id || crypto.randomUUID(), label: l.label || "", url: l.url || "" })) : [],
-            music: { url: c.music?.url || "", label: c.music?.label || "" },
+            spotifyEmbed: c.spotifyEmbed || "",
             spotifyNowPlaying: !!c.spotifyNowPlaying,
           },
         };
@@ -326,10 +326,9 @@
         {/each}
       </div>
 
-      <div class="section">Background music</div>
-      <label>Audio file URL (.mp3 / .ogg)<input bind:value={data.config.music.url} placeholder="https://…mp3" /></label>
-      <p class="hint">Plays on your page after a visitor clicks "enter" (browsers block instant autoplay).</p>
-      <label>Music label<input bind:value={data.config.music.label} placeholder="Now playing…" /></label>
+      <div class="section">Spotify</div>
+      <label>Shared Spotify link (song or playlist)<input bind:value={data.config.spotifyEmbed} placeholder="https://open.spotify.com/track/…  or  /playlist/…" /></label>
+      <p class="hint">Paste a shared Spotify song or playlist link. Visitors get a player showing the artist, track and progress, and can play or pause it on their own.</p>
 
       {#if connected("spotify")}
         <label class="ckbox"><input type="checkbox" bind:checked={data.config.spotifyNowPlaying} /> Show my Spotify “now playing” under my profile card</label>

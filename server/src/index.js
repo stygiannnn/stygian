@@ -61,7 +61,7 @@ async function handleApi(url, request, env) {
 
   if (p === "/api/me/profile" && m === "GET") return myProfile(request, env);
   if (p === "/api/me/profile" && m === "PUT") return saveProfile(request, env);
-  if (p.startsWith("/api/profile/") && m === "GET") return publicProfile(p.slice("/api/profile/".length), env);
+  if (p.startsWith("/api/profile/") && m === "GET") return publicProfile(p.slice("/api/profile/".length), request, env);
 
   if (p.startsWith("/api/oauth/") && m === "GET") return oauthRoute(p, url, request, env);
   if (p === "/api/me/social" && m === "GET") return mySocial(request, env);
@@ -72,11 +72,6 @@ async function handleApi(url, request, env) {
   if (p.startsWith("/api/uploads/") && m === "DELETE") return deleteUpload(p, request, env);
 
   if (p === "/api/cursors" && m === "GET") return listCursors(request, env);
-
-  if (p === "/api/me/username" && m === "PUT") return changeUsername(request, env);
-
-  if (p === "/api/admin/users" && m === "GET") return adminListUsers(request, env);
-  if (p.startsWith("/api/admin/users/")) return adminUserRoute(p, request, env);
 
   return json({ ok: false, error: "not_found" }, 404);
 }
@@ -126,13 +121,12 @@ function getCookie(request, name) {
   }
   return null;
 }
-async function createSession(env, userId, request) {
+async function createSession(env, userId) {
   const token = randomToken(32);
   const id = await sha256Hex(token);
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare("INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
     .bind(id, userId, now, now + SESSION_TTL).run();
-  if (request) { try { await recordUserMeta(env, userId, request, now); } catch (e) { console.error("user meta", e); } }
   return token;
 }
 async function currentUser(request, env) {
@@ -141,13 +135,13 @@ async function currentUser(request, env) {
   const id = await sha256Hex(token);
   const now = Math.floor(Date.now() / 1000);
   return await env.DB.prepare(
-    `SELECT u.id, u.email, u.username, u.email_verified, u.badges
+    `SELECT u.id, u.email, u.username, u.email_verified
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.id = ? AND s.expires_at > ?`
   ).bind(id, now).first();
 }
 function publicUser(u) {
-  return { id: u.id, email: u.email, username: u.username, emailVerified: !!u.email_verified, isOwner: isOwner(u) };
+  return { id: u.id, email: u.email, username: u.username, emailVerified: !!u.email_verified };
 }
 
 // ---------- auth ----------
@@ -214,8 +208,8 @@ async function verify(request, env) {
   }
   await env.DB.prepare("UPDATE users SET email_verified = 1, updated_at = ? WHERE id = ?").bind(now, user.id).run();
   await env.DB.prepare("DELETE FROM email_verifications WHERE user_id = ?").bind(user.id).run();
-  const token = await createSession(env, user.id, request);
-  const fresh = await env.DB.prepare("SELECT id, email, username, email_verified, badges FROM users WHERE id = ?").bind(user.id).first();
+  const token = await createSession(env, user.id);
+  const fresh = await env.DB.prepare("SELECT id, email, username, email_verified FROM users WHERE id = ?").bind(user.id).first();
   return json({ ok: true, user: publicUser(fresh) }, 200, { "Set-Cookie": sessionCookie(token, SESSION_TTL) });
 }
 async function resend(request, env) {
@@ -231,7 +225,7 @@ async function login(request, env) {
   const id = String(identifier || "").trim();
   if (!id || !validPassword(password)) return json({ ok: false, error: "invalid_input" }, 400);
   const user = await env.DB.prepare(
-    "SELECT id, email, username, password_hash, email_verified, badges FROM users WHERE email = ? OR username_lower = ?"
+    "SELECT id, email, username, password_hash, email_verified FROM users WHERE email = ? OR username_lower = ?"
   ).bind(id.toLowerCase(), id.toLowerCase()).first();
   if (!user) return json({ ok: false, error: "invalid_credentials" }, 401);
   const ok = await verifyPassword(password, user.password_hash);
@@ -240,7 +234,7 @@ async function login(request, env) {
     await issueCode(env, user.id, user.email);
     return json({ ok: false, error: "not_verified", email: user.email }, 403);
   }
-  const token = await createSession(env, user.id, request);
+  const token = await createSession(env, user.id);
   return json({ ok: true, user: publicUser(user) }, 200, { "Set-Cookie": sessionCookie(token, SESSION_TTL) });
 }
 async function logout(request, env) {
@@ -256,7 +250,32 @@ async function me(request, env) {
 // ---------- profiles ----------
 function parseConfig(s) { try { return JSON.parse(s || "{}"); } catch { return {}; } }
 
-async function publicProfile(usernameRaw, env) {
+// ---------- profile view counter (deduped per visitor IP) ----------
+let viewsSchemaReady = false;
+async function ensureViewsSchema(env) {
+  if (viewsSchemaReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS profile_views (user_id TEXT NOT NULL, visitor TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (user_id, visitor))"
+  ).run();
+  viewsSchemaReady = true;
+}
+async function recordView(env, userId, request) {
+  try {
+    await ensureViewsSchema(env);
+    // Dedup by the visitor's IP (hashed together with the profile id). Repeat visits —
+    // even from another browser on the same connection — collapse to one row, so a user
+    // cannot inflate their own view count by reopening their page.
+    const ip = (request && request.headers.get("CF-Connecting-IP")) || "0.0.0.0";
+    const visitor = await sha256Hex(userId + "|" + ip);
+    const now = Math.floor(Date.now() / 1000);
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO profile_views (user_id, visitor, created_at) VALUES (?, ?, ?)"
+    ).bind(userId, visitor, now).run();
+    const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM profile_views WHERE user_id = ?").bind(userId).first();
+    return (c && c.n) || 0;
+  } catch (e) { console.error("views", e); return 0; }
+}
+async function publicProfile(usernameRaw, request, env) {
   const u = decodeURIComponent(usernameRaw || "").toLowerCase();
   if (!validUsername(u)) return json({ ok: false, error: "not_found" }, 404);
   const row = await env.DB.prepare(
@@ -267,15 +286,13 @@ async function publicProfile(usernameRaw, env) {
   if (!row) return json({ ok: false, error: "not_found" }, 404);
   const socials = await loadPublicSocials(env, row.uid);
   const cfg = parseConfig(row.config);
-  const override = await getActiveOverride(env, row.uid);
-  if (override) applyOverride(cfg, override);
   const verified = Object.keys(socials).length > 0;
   const badges = String(row.badges || "").split(",").map((b) => b.trim().toLowerCase()).filter(Boolean);
   let nowPlaying = null;
   if (cfg && cfg.spotifyNowPlaying) nowPlaying = await fetchNowPlaying(env, row.uid);
+  const views = await recordView(env, row.uid, request);
   return json({ ok: true, profile: {
-    username: row.username, displayName: row.display_name, bio: row.bio, config: cfg, socials, verified, badges, nowPlaying,
-    overrideExpiresAt: override ? override.expires_at : null,
+    username: row.username, displayName: row.display_name, bio: row.bio, config: cfg, socials, verified, badges, nowPlaying, views,
   }});
 }
 async function myProfile(request, env) {
@@ -599,244 +616,4 @@ async function cleanupExpiredUploads(env) {
     if (rows.length) await env.DB.prepare("DELETE FROM uploads WHERE expires_at < ?").bind(now).run();
     try { await ensureUploadEvents(env); await env.DB.prepare("DELETE FROM upload_events WHERE created_at < ?").bind(now - UPLOAD_LIMIT_WINDOW).run(); } catch (e) { console.error("cron event prune", e); }
   } catch (e) { console.error("cleanup", e); }
-}
-
-// ---------- owner / admin ----------
-function hasBadge(u, name) {
-  return String(u?.badges || "").split(",").map((b) => b.trim().toLowerCase()).includes(name);
-}
-function isOwner(u) { return hasBadge(u, "owner"); }
-async function currentOwner(request, env) {
-  const u = await currentUser(request, env);
-  if (!u || !isOwner(u)) return null;
-  return u;
-}
-
-let adminSchemaReady = false;
-async function ensureAdminSchema(env) {
-  if (adminSchemaReady) return;
-  await env.DB.prepare(
-    "CREATE TABLE IF NOT EXISTS profile_overrides (user_id TEXT PRIMARY KEY, avatar TEXT, banner TEXT, background TEXT, set_by TEXT, expires_at INTEGER NOT NULL)"
-  ).run();
-  for (const c of ["last_ip TEXT", "last_ua TEXT", "last_country TEXT", "last_city TEXT", "last_region TEXT", "last_seen_at INTEGER"]) {
-    try { await env.DB.prepare("ALTER TABLE users ADD COLUMN " + c).run(); } catch (e) { /* column already exists */ }
-  }
-  adminSchemaReady = true;
-}
-
-async function recordUserMeta(env, userId, request, now) {
-  await ensureAdminSchema(env);
-  const ip = request.headers.get("CF-Connecting-IP") || null;
-  const ua = (request.headers.get("User-Agent") || "").slice(0, 400) || null;
-  const cf = request.cf || {};
-  await env.DB.prepare(
-    "UPDATE users SET last_ip = ?, last_ua = ?, last_country = ?, last_city = ?, last_region = ?, last_seen_at = ? WHERE id = ?"
-  ).bind(ip, ua, cf.country || null, cf.city || null, cf.region || null, now, userId).run();
-}
-
-// --- temporary profile overrides (the "prank" command) ---
-async function getActiveOverride(env, userId) {
-  try {
-    await ensureAdminSchema(env);
-    const now = Math.floor(Date.now() / 1000);
-    return (await env.DB.prepare(
-      "SELECT avatar, banner, background, expires_at FROM profile_overrides WHERE user_id = ? AND expires_at > ?"
-    ).bind(userId, now).first()) || null;
-  } catch (e) { console.error("override", e); return null; }
-}
-function applyOverride(cfg, o) {
-  if (o.avatar) cfg.avatar = o.avatar;
-  if (o.banner) cfg.banner = o.banner;
-  if (o.background) { cfg.theme = cfg.theme || {}; cfg.theme.bgMode = "image"; cfg.theme.bgImage = o.background; }
-}
-
-// --- self-serve username change (uniqueness enforced) ---
-async function changeUsername(request, env) {
-  const user = await currentUser(request, env);
-  if (!user) return json({ ok: false, error: "unauthorized" }, 401);
-  const { username } = await body(request);
-  const u = String(username || "").trim();
-  if (!validUsername(u)) return json({ ok: false, error: "invalid_username" }, 400);
-  if (!isCleanName(u)) return json({ ok: false, error: "inappropriate_username" }, 400);
-  const lower = u.toLowerCase();
-  const now = Math.floor(Date.now() / 1000);
-  if (lower === String(user.username).toLowerCase()) {
-    await env.DB.prepare("UPDATE users SET username = ?, updated_at = ? WHERE id = ?").bind(u, now, user.id).run();
-    return json({ ok: true, username: u });
-  }
-  const taken = await env.DB.prepare("SELECT id FROM users WHERE username_lower = ?").bind(lower).first();
-  if (taken) return json({ ok: false, error: "username_taken" }, 409);
-  await env.DB.prepare("UPDATE users SET username = ?, username_lower = ?, updated_at = ? WHERE id = ?").bind(u, lower, now, user.id).run();
-  return json({ ok: true, username: u });
-}
-
-async function adminListUsers(request, env) {
-  const owner = await currentOwner(request, env);
-  if (!owner) return json({ ok: false, error: "forbidden" }, 403);
-  await ensureAdminSchema(env);
-  const res = await env.DB.prepare(
-    `SELECT u.id, u.email, u.username, u.email_verified, u.badges, u.created_at,
-            u.last_ip, u.last_country, u.last_city, u.last_seen_at, p.display_name,
-            (SELECT COUNT(*) FROM uploads up WHERE up.user_id = u.id) AS upload_count
-       FROM users u LEFT JOIN profiles p ON p.user_id = u.id
-      ORDER BY u.created_at DESC`
-  ).all();
-  const users = (res.results || []).map((r) => ({
-    id: r.id, email: r.email, username: r.username, displayName: r.display_name || "",
-    emailVerified: !!r.email_verified, badges: String(r.badges || ""), createdAt: r.created_at,
-    lastIp: r.last_ip || null, lastCountry: r.last_country || null, lastCity: r.last_city || null,
-    lastSeenAt: r.last_seen_at || null, uploadCount: r.upload_count || 0,
-  }));
-  return json({ ok: true, users, me: owner.id });
-}
-
-async function adminUserRoute(p, request, env) {
-  const owner = await currentOwner(request, env);
-  if (!owner) return json({ ok: false, error: "forbidden" }, 403);
-  const parts = p.split("/").filter(Boolean); // ["api","admin","users",":id",<sub>,<extra>]
-  const targetId = parts[3];
-  const sub = parts[4] || "";
-  const m = request.method;
-  if (!targetId) return json({ ok: false, error: "not_found" }, 404);
-
-  if (!sub && m === "GET") return adminUserDetail(targetId, env);
-  if (!sub && m === "DELETE") return adminDeleteUser(targetId, owner, env);
-  if (!sub && m === "PATCH") return adminUpdateUser(targetId, request, env);
-  if (sub === "password" && m === "POST") return adminResetPassword(targetId, env, request);
-  if (sub === "wipe" && m === "POST") return adminWipeProfile(targetId, env);
-  if (sub === "image" && m === "POST") return adminClearImage(targetId, request, env);
-  if (sub === "prank" && m === "POST") return adminPrank(targetId, owner, request, env);
-  if (sub === "uploads" && parts[5] && m === "DELETE") return adminDeleteUpload(targetId, parts[5], env);
-  return json({ ok: false, error: "not_found" }, 404);
-}
-
-async function adminUserDetail(id, env) {
-  await ensureAdminSchema(env);
-  const u = await env.DB.prepare(
-    `SELECT id, email, username, email_verified, badges, created_at, updated_at,
-            last_ip, last_ua, last_country, last_city, last_region, last_seen_at
-       FROM users WHERE id = ?`
-  ).bind(id).first();
-  if (!u) return json({ ok: false, error: "not_found" }, 404);
-  const prof = await env.DB.prepare("SELECT display_name, bio, config, updated_at FROM profiles WHERE user_id = ?").bind(id).first();
-  const now = Math.floor(Date.now() / 1000);
-  const ur = await env.DB.prepare("SELECT id, filename, content_type, ext, size, created_at, expires_at FROM uploads WHERE user_id = ? ORDER BY created_at DESC").bind(id).all();
-  const base = baseUrl(env);
-  const uploads = (ur.results || []).map((r) => ({
-    id: r.id, url: base + "/f/" + r.id + "." + r.ext, filename: r.filename, contentType: r.content_type,
-    size: r.size, createdAt: r.created_at, expiresAt: r.expires_at, expired: r.expires_at < now,
-  }));
-  const soc = await env.DB.prepare("SELECT platform, platform_username FROM social_connections WHERE user_id = ?").bind(id).all();
-  const socials = (soc.results || []).map((s) => ({ platform: s.platform, username: s.platform_username }));
-  const cfg = parseConfig(prof?.config);
-  return json({ ok: true, user: {
-    id: u.id, email: u.email, username: u.username, emailVerified: !!u.email_verified, badges: String(u.badges || ""),
-    createdAt: u.created_at, updatedAt: u.updated_at,
-    lastIp: u.last_ip || null, lastUa: u.last_ua || null, lastCountry: u.last_country || null,
-    lastCity: u.last_city || null, lastRegion: u.last_region || null, lastSeenAt: u.last_seen_at || null,
-    displayName: prof?.display_name || "", bio: prof?.bio || "", layout: cfg.layout || "background",
-    avatar: cfg.avatar || null, banner: cfg.banner || null, background: (cfg.theme && cfg.theme.bgImage) || null,
-    uploads, socials,
-  }});
-}
-
-async function adminDeleteUser(id, owner, env) {
-  if (id === owner.id) return json({ ok: false, error: "cannot_delete_self" }, 400);
-  const target = await env.DB.prepare("SELECT id FROM users WHERE id = ?").bind(id).first();
-  if (!target) return json({ ok: false, error: "not_found" }, 404);
-  if (env.UPLOADS) {
-    const ur = await env.DB.prepare("SELECT r2_key FROM uploads WHERE user_id = ?").bind(id).all();
-    for (const r of (ur.results || [])) { try { await env.UPLOADS.delete(r.r2_key); } catch (e) { console.error("r2 del", e); } }
-  }
-  for (const t of ["uploads", "upload_events", "sessions", "social_connections", "oauth_states", "email_verifications", "profile_overrides", "profiles"]) {
-    try { await env.DB.prepare("DELETE FROM " + t + " WHERE user_id = ?").bind(id).run(); } catch (e) { /* table may not exist */ }
-  }
-  await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(id).run();
-  return json({ ok: true });
-}
-
-async function adminUpdateUser(id, request, env) {
-  const data = await body(request);
-  const target = await env.DB.prepare("SELECT id, username FROM users WHERE id = ?").bind(id).first();
-  if (!target) return json({ ok: false, error: "not_found" }, 404);
-  const now = Math.floor(Date.now() / 1000);
-  if (typeof data.username === "string" && data.username.trim()) {
-    const u = data.username.trim();
-    if (!validUsername(u)) return json({ ok: false, error: "invalid_username" }, 400);
-    const lower = u.toLowerCase();
-    if (lower !== String(target.username).toLowerCase()) {
-      const taken = await env.DB.prepare("SELECT id FROM users WHERE username_lower = ? AND id != ?").bind(lower, id).first();
-      if (taken) return json({ ok: false, error: "username_taken" }, 409);
-    }
-    await env.DB.prepare("UPDATE users SET username = ?, username_lower = ?, updated_at = ? WHERE id = ?").bind(u, lower, now, id).run();
-  }
-  if (typeof data.displayName === "string") {
-    const dn = data.displayName.slice(0, 60);
-    await env.DB.prepare("UPDATE profiles SET display_name = ?, updated_at = ? WHERE user_id = ?").bind(dn, now, id).run();
-  }
-  return json({ ok: true });
-}
-
-async function adminResetPassword(id, env, request) {
-  const { password } = await body(request);
-  if (!validPassword(password)) return json({ ok: false, error: "weak_password" }, 400);
-  const target = await env.DB.prepare("SELECT id FROM users WHERE id = ?").bind(id).first();
-  if (!target) return json({ ok: false, error: "not_found" }, 404);
-  const hash = await hashPassword(password);
-  const now = Math.floor(Date.now() / 1000);
-  await env.DB.prepare("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?").bind(hash, now, id).run();
-  await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(id).run();
-  return json({ ok: true });
-}
-
-async function adminWipeProfile(id, env) {
-  const target = await env.DB.prepare("SELECT username FROM users WHERE id = ?").bind(id).first();
-  if (!target) return json({ ok: false, error: "not_found" }, 404);
-  const now = Math.floor(Date.now() / 1000);
-  await env.DB.prepare("UPDATE profiles SET display_name = ?, bio = '', config = '{}', updated_at = ? WHERE user_id = ?").bind(target.username, now, id).run();
-  return json({ ok: true });
-}
-
-async function adminClearImage(id, request, env) {
-  const { which } = await body(request);
-  const prof = await env.DB.prepare("SELECT config FROM profiles WHERE user_id = ?").bind(id).first();
-  if (!prof) return json({ ok: false, error: "not_found" }, 404);
-  const cfg = parseConfig(prof.config);
-  if (which === "avatar") delete cfg.avatar;
-  else if (which === "banner") delete cfg.banner;
-  else if (which === "background") { if (cfg.theme) delete cfg.theme.bgImage; }
-  else return json({ ok: false, error: "bad_target" }, 400);
-  const now = Math.floor(Date.now() / 1000);
-  await env.DB.prepare("UPDATE profiles SET config = ?, updated_at = ? WHERE user_id = ?").bind(JSON.stringify(cfg), now, id).run();
-  return json({ ok: true });
-}
-
-async function adminDeleteUpload(userId, uploadId, env) {
-  const row = await env.DB.prepare("SELECT r2_key FROM uploads WHERE id = ? AND user_id = ?").bind(uploadId, userId).first();
-  if (row) {
-    if (env.UPLOADS) { try { await env.UPLOADS.delete(row.r2_key); } catch (e) { console.error("r2 delete", e); } }
-    await env.DB.prepare("DELETE FROM uploads WHERE id = ?").bind(uploadId).run();
-  }
-  return json({ ok: true });
-}
-
-async function adminPrank(id, owner, request, env) {
-  await ensureAdminSchema(env);
-  const data = await body(request);
-  const avatar = data.avatar ? String(data.avatar).slice(0, 2000) : null;
-  const banner = data.banner ? String(data.banner).slice(0, 2000) : null;
-  const background = data.background ? String(data.background).slice(0, 2000) : null;
-  let seconds = Number(data.seconds) || 15;
-  if (seconds < 1) seconds = 1;
-  if (seconds > 300) seconds = 300;
-  if (!avatar && !banner && !background) return json({ ok: false, error: "nothing_to_set" }, 400);
-  const target = await env.DB.prepare("SELECT id FROM users WHERE id = ?").bind(id).first();
-  if (!target) return json({ ok: false, error: "not_found" }, 404);
-  const now = Math.floor(Date.now() / 1000);
-  const expires = now + seconds;
-  await env.DB.prepare(
-    "INSERT INTO profile_overrides (user_id, avatar, banner, background, set_by, expires_at) VALUES (?, ?, ?, ?, ?, ?) " +
-    "ON CONFLICT(user_id) DO UPDATE SET avatar=excluded.avatar, banner=excluded.banner, background=excluded.background, set_by=excluded.set_by, expires_at=excluded.expires_at"
-  ).bind(id, avatar, banner, background, owner.id, expires).run();
-  return json({ ok: true, expiresAt: expires, seconds });
 }

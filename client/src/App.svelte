@@ -2,7 +2,6 @@
   import Profile from "./Profile.svelte";
   import Editor from "./Editor.svelte";
   import Uploads from "./Uploads.svelte";
-  import Admin from "./Admin.svelte";
 
   let view = $state("loading"); // loading | public | notfound | landing | signup | verify | login | dashboard | editor
   let user = $state(null);
@@ -136,9 +135,6 @@
 {:else if view === "uploads"}
   <Uploads onClose={() => (view = "dashboard")} />
 
-{:else if view === "admin"}
-  <Admin onClose={() => (view = "dashboard")} />
-
 {:else if view === "notfound"}
   <main><div class="card"><h1>stygian</h1><p class="tag">no one here by that name.</p><a class="link" href="/">← home</a></div></main>
 
@@ -191,7 +187,6 @@
         <div class="row">
           <button onclick={() => go("editor")}>Edit my page</button>
           <button onclick={() => go("uploads")}>Upload files</button>
-          {#if user.isOwner}<button class="owner" onclick={() => go("admin")}>⚙ Owner panel</button>{/if}
           <a class="btnlink" href={"/" + user.username} target="_blank" rel="noopener">View my page ↗</a>
           <button class="ghost" onclick={doLogout}>Log out</button>
         </div>
@@ -220,5 +215,4 @@
   .row { display: flex; gap: 0.6rem; flex-direction: column; }
   .error { color: #f87171; font-size: 0.85rem; margin-top: 1rem; }
   strong { color: #e7e5e4; }
-  button.owner { background: linear-gradient(135deg, #7c3aed, #db2777); }
 </style>

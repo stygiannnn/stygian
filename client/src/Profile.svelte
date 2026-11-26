@@ -3,20 +3,34 @@
 
   let { profile, preview = false } = $props();
 
-  let entered = $state(false);
-  let audioEl = $state(null);
-
   function safeUrl(u) {
     if (!u) return "";
     try { const x = new URL(u); return (x.protocol === "http:" || x.protocol === "https:") ? u : ""; } catch { return ""; }
+  }
+
+  // Turn a shared Spotify link (or spotify: URI) into its official embed-player URL.
+  function spotifyEmbedUrl(raw) {
+    if (!raw) return "";
+    try {
+      const s = String(raw).trim();
+      const uri = s.match(/^spotify:(track|playlist|album|episode|show|artist):([A-Za-z0-9]+)/i);
+      if (uri) return `https://open.spotify.com/embed/${uri[1].toLowerCase()}/${uri[2]}`;
+      const x = new URL(s.includes("://") ? s : "https://" + s);
+      if (!/(^|\.)spotify\.com$/i.test(x.hostname)) return "";
+      const parts = x.pathname.split("/").filter(Boolean);
+      if (parts[0] && /^intl-/i.test(parts[0])) parts.shift();
+      const type = (parts[0] || "").toLowerCase();
+      const id = (parts[1] || "").replace(/[^A-Za-z0-9].*$/, "");
+      if (!["track", "playlist", "album", "episode", "show", "artist"].includes(type) || !id) return "";
+      return `https://open.spotify.com/embed/${type}/${id}`;
+    } catch { return ""; }
   }
 
   let cfg = $derived(profile?.config ?? {});
   let theme = $derived(cfg.theme ?? {});
   let layout = $derived(cfg.layout === "banner" ? "banner" : "background");
   let status = $derived((cfg.status || "").slice(0, 50));
-  let musicUrl = $derived(safeUrl(cfg.music?.url));
-  let hasAudio = $derived(!!musicUrl && !preview);
+  let spotifyEmbed = $derived(spotifyEmbedUrl(cfg.spotifyEmbed));
   let verified = $derived(!!profile?.verified);
   let badges = $derived(Array.isArray(profile?.badges) ? profile.badges : []);
   const BADGE_DEFS = {
@@ -28,17 +42,7 @@
   let shownBadges = $derived(BADGE_ORDER.filter((k) => badges.includes(k)));
   let nowPlaying = $derived(profile?.nowPlaying ?? null);
   let socials = $derived(profile?.socials ?? {});
-
-  // When a temporary admin override (the "prank") is active, reload once it expires
-  // so the viewer sees the profile return to normal without a manual refresh.
-  $effect(() => {
-    const exp = profile?.overrideExpiresAt;
-    if (!exp || preview) return;
-    const ms = exp * 1000 - Date.now();
-    if (ms <= 0) return;
-    const t = setTimeout(() => { try { location.reload(); } catch {} }, Math.min(ms + 400, 310000));
-    return () => clearTimeout(t);
-  });
+  let views = $derived(typeof profile?.views === "number" ? profile.views : null);
 
   function statFor(key) {
     const map = { x: "twitter", tiktok: "tiktok", pinterest: "pinterest" };
@@ -160,16 +164,10 @@
     return `zoom:${sc};`;
   }
 
-  function enter() { entered = true; if (audioEl) audioEl.play().catch(() => {}); }
 </script>
 
 {#if profile}
   <div class="page" class:banner={layout === "banner"} style={pageStyle()}>
-    {#if hasAudio}
-      <audio bind:this={audioEl} src={musicUrl} loop></audio>
-      {#if !entered}<button class="enter" onclick={enter}>click to enter</button>{/if}
-    {/if}
-
     {#if layout === "banner"}
       <div class="card" style={cardSizeStyle()}>
         <div class="cardbg" style={cardBgStyle()}></div>
@@ -204,7 +202,7 @@
               {/if}
             {/each}
           </div>
-          {#if musicUrl || cfg.music?.label}<p class="np">🎵 {cfg.music?.label || "Now playing"}</p>{/if}
+          {#if spotifyEmbed}<iframe class="spotify" title="Spotify player" src={spotifyEmbed} loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>{/if}
         </div>
       </div>
     {:else}
@@ -233,7 +231,7 @@
             {/if}
           {/each}
         </div>
-        {#if musicUrl || cfg.music?.label}<p class="np">🎵 {cfg.music?.label || "Now playing"}</p>{/if}
+        {#if spotifyEmbed}<iframe class="spotify" title="Spotify player" src={spotifyEmbed} loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>{/if}
       </div>
     {/if}
     {#if nowPlaying}
@@ -246,6 +244,7 @@
         {/if}
       </div>
     {/if}
+    {#if views != null}<div class="views">👁 {views.toLocaleString()} {views === 1 ? "view" : "views"}</div>{/if}
     {#if BRANDFETCH_CLIENT_ID}<a class="credit" href="https://brandfetch.com" target="_blank" rel="noopener noreferrer">Logos · Brandfetch</a>{/if}
   </div>
 {/if}
@@ -253,7 +252,7 @@
 <style>
   .page { position: relative; min-height: 100vh; display: grid; place-items: center; color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; padding: 2.5rem 1rem; cursor: var(--cursor, auto); }
   .page a, .page button { cursor: var(--cursor, pointer); }
-  .enter { position: fixed; inset: 0; z-index: 10; border: none; background: rgba(0,0,0,0.75); color: #fff; font-size: 1.1rem; letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; backdrop-filter: blur(6px); }
+  .spotify { display: block; width: 100%; max-width: min(440px, 94vw); height: 152px; border: 0; border-radius: 12px; margin: 1.1rem auto 0; }
 
   /* banner card (Discord-style) */
   .card { position: relative; width: min(440px, 94vw); background: rgba(12,12,16,0.3); backdrop-filter: blur(20px) saturate(1.3); -webkit-backdrop-filter: blur(20px) saturate(1.3); border: none; border-radius: 20px; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,0.5); }
@@ -311,4 +310,5 @@
   .np-eq { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #1db954; margin-right: 6px; vertical-align: middle; }
   .credit { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 0.68rem; letter-spacing: 0.02em; color: rgba(255,255,255,0.28); text-decoration: none; z-index: 5; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
   .credit:hover { color: rgba(255,255,255,0.55); }
+  .views { position: absolute; bottom: 27px; left: 0; right: 0; text-align: center; font-size: 0.7rem; letter-spacing: 0.02em; color: rgba(255,255,255,0.42); z-index: 5; text-shadow: 0 1px 3px rgba(0,0,0,0.6); pointer-events: none; }
 </style>
