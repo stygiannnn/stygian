@@ -42,6 +42,9 @@
   let shownBadges = $derived(BADGE_ORDER.filter((k) => badges.includes(k)));
   let nowPlaying = $derived(profile?.nowPlaying ?? null);
   let socials = $derived(profile?.socials ?? {});
+  let tab = $state("links"); // "links" | "accounts"
+  let connections = $derived(Object.entries(socials || {}).map(([platform, v]) => ({ platform, username: v?.username || "", url: v?.url || "" })));
+  const PLATFORM_DOMAIN = { spotify: "spotify.com", tiktok: "tiktok.com", pinterest: "pinterest.com", roblox: "roblox.com", discord: "discord.com", twitter: "x.com", twitch: "twitch.com", youtube: "youtube.com", instagram: "instagram.com", github: "github.com" };
   let views = $derived(typeof profile?.views === "number" ? profile.views : null);
 
   function statFor(key) {
@@ -166,6 +169,48 @@
 
 </script>
 
+{#snippet linksArea()}
+  {#if connections.length}
+    <select class="switch" bind:value={tab} aria-label="View">
+      <option value="links">Social links</option>
+      <option value="accounts">Connected accounts</option>
+    </select>
+  {/if}
+  {#if tab === "accounts" && connections.length}
+    <div class="links">
+      {#each connections as c (c.platform)}
+        {@const domain = PLATFORM_DOMAIN[c.platform]}
+        <a class="link conn" class:nolink={!c.url} href={c.url || undefined} target={c.url ? "_blank" : undefined} rel="noopener noreferrer nofollow">
+          <span class="ico verif" data-label="Account verified">{#if BRANDFETCH_CLIENT_ID && domain}<img class="logo" use:logoCache={domain} alt="" />{:else}{@html iconSvg(c.platform)}{/if}</span>
+          <span class="meta">
+            <span class="lbl">{c.username ? "@" + c.username : platformName(c.platform)}</span>
+            <span class="stat vstat">{platformName(c.platform)} · verified</span>
+          </span>
+        </a>
+      {/each}
+    </div>
+  {:else}
+    <div class="links">
+      {#each (cfg.links || []) as link}
+        {#if safeUrl(link.url)}
+          {@const key = detectPlatform(link)}
+          {@const s = statFor(key)}
+          {@const dom = linkDomain(link)}
+          <a class="link" href={safeUrl(link.url)} target="_blank" rel="noopener noreferrer nofollow">
+            <span class="ico">{#if BRANDFETCH_CLIENT_ID && dom}<img class="logo" use:logoCache={dom} alt="" />{:else}{@html iconSvg(key)}{/if}</span>
+            <span class="meta">
+              <span class="lbl">{link.label || platformName(key)}</span>
+              {#if s && (s.followers != null || s.likes != null)}
+                <span class="stat">{#if s.followers != null}{fmt(s.followers)} followers{/if}{#if s.likes != null}{s.followers != null ? " · " : ""}{fmt(s.likes)} likes{/if}</span>
+              {/if}
+            </span>
+          </a>
+        {/if}
+      {/each}
+    </div>
+  {/if}
+{/snippet}
+
 {#if profile}
   <div class="page" class:banner={layout === "banner"} style={pageStyle()}>
     {#if layout === "banner"}
@@ -184,24 +229,7 @@
             {#if shownBadges.length}<div class="badges">{#each shownBadges as b}<span class="badge" data-label={BADGE_DEFS[b].label}>{BADGE_DEFS[b].emoji}</span>{/each}</div>{/if}
           </div>
           {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
-          <div class="links">
-            {#each (cfg.links || []) as link}
-              {#if safeUrl(link.url)}
-                {@const key = detectPlatform(link)}
-                {@const s = statFor(key)}
-                {@const dom = linkDomain(link)}
-                <a class="link" href={safeUrl(link.url)} target="_blank" rel="noopener noreferrer nofollow">
-                  <span class="ico">{#if BRANDFETCH_CLIENT_ID && dom}<img class="logo" use:logoCache={dom} alt="" />{:else}{@html iconSvg(key)}{/if}</span>
-                  <span class="meta">
-                    <span class="lbl">{link.label || platformName(key)}</span>
-                    {#if s && (s.followers != null || s.likes != null)}
-                      <span class="stat">{#if s.followers != null}{fmt(s.followers)} followers{/if}{#if s.likes != null}{s.followers != null ? " · " : ""}{fmt(s.likes)} likes{/if}</span>
-                    {/if}
-                  </span>
-                </a>
-              {/if}
-            {/each}
-          </div>
+          {@render linksArea()}
           {#if spotifyEmbed}<iframe class="spotify" title="Spotify player" src={spotifyEmbed} loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>{/if}
         </div>
       </div>
@@ -212,24 +240,7 @@
         <p class="handle">@{profile.username}</p>
         {#if shownBadges.length}<div class="badges">{#each shownBadges as b}<span class="badge" data-label={BADGE_DEFS[b].label}>{BADGE_DEFS[b].emoji}</span>{/each}</div>{/if}
         {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
-        <div class="links">
-          {#each (cfg.links || []) as link}
-            {#if safeUrl(link.url)}
-              {@const key = detectPlatform(link)}
-              {@const s = statFor(key)}
-              {@const dom = linkDomain(link)}
-              <a class="link" href={safeUrl(link.url)} target="_blank" rel="noopener noreferrer nofollow">
-                <span class="ico">{#if BRANDFETCH_CLIENT_ID && dom}<img class="logo" use:logoCache={dom} alt="" />{:else}{@html iconSvg(key)}{/if}</span>
-                <span class="meta">
-                  <span class="lbl">{link.label || platformName(key)}</span>
-                  {#if s && (s.followers != null || s.likes != null)}
-                    <span class="stat">{#if s.followers != null}{fmt(s.followers)} followers{/if}{#if s.likes != null}{s.followers != null ? " · " : ""}{fmt(s.likes)} likes{/if}</span>
-                  {/if}
-                </span>
-              </a>
-            {/if}
-          {/each}
-        </div>
+        {@render linksArea()}
         {#if spotifyEmbed}<iframe class="spotify" title="Spotify player" src={spotifyEmbed} loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>{/if}
       </div>
     {/if}
@@ -290,6 +301,14 @@
   .link .meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
   .link .lbl { display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .link .stat { font-size: 0.72rem; opacity: 0.6; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .switch { display: block; margin: 0 0 0.7rem auto; background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.14); border-radius: 10px; padding: 0.4rem 0.6rem; font-size: 0.8rem; font-family: inherit; cursor: pointer; outline: none; -webkit-appearance: none; appearance: none; }
+  .switch:focus { border-color: #6366f1; }
+  .switch option { background: #111113; color: #e7e5e4; }
+  .conn.nolink { cursor: default; }
+  .conn .ico.verif { position: relative; overflow: visible; }
+  .ico.verif::after { content: attr(data-label); position: absolute; bottom: 135%; left: 50%; transform: translateX(-50%); background: #111113; border: 1px solid #2a2a30; color: #e7e5e4; font-size: 0.66rem; font-weight: 500; padding: 3px 7px; border-radius: 6px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.12s; z-index: 7; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+  .ico.verif:hover::after { opacity: 1; }
+  .conn .vstat { color: #4ade80; opacity: 0.9; }
   .link :global(.verified) { width: 15px; height: 15px; flex-shrink: 0; color: #1d9bf0; }
   .name .vbadge { display: inline-flex; vertical-align: middle; margin-left: 6px; }
   .name :global(.verified) { width: 0.7em; height: 0.7em; color: #1d9bf0; }

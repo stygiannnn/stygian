@@ -328,16 +328,32 @@ function redirectUri(env, platform) { return baseUrl(env) + "/api/oauth/" + plat
 async function loadPublicSocials(env, userId) {
   const out = {};
   try {
-    const res = await env.DB.prepare("SELECT platform, stats FROM social_connections WHERE user_id = ?").bind(userId).all();
+    const res = await env.DB.prepare("SELECT platform, platform_user_id, platform_username, stats FROM social_connections WHERE user_id = ?").bind(userId).all();
     for (const s of (res.results || [])) {
       let st = {}; try { st = JSON.parse(s.stats || "{}"); } catch {}
+      const username = st.username || s.platform_username || "";
       out[s.platform] = {
-        username: st.username || "", followers: st.followers ?? null,
+        username, followers: st.followers ?? null,
         likes: st.likes ?? null, following: st.following ?? null, verified: !!st.verified,
+        url: socialProfileUrl(s.platform, username, s.platform_user_id),
       };
     }
   } catch (e) { console.error("loadPublicSocials", e); }
   return out;
+}
+// Best-effort public profile URL for a connected account (for the "connected accounts" redirect).
+function socialProfileUrl(platform, username, pid) {
+  const u = encodeURIComponent(username || "");
+  const id = encodeURIComponent(pid || "");
+  switch (platform) {
+    case "tiktok": return username ? "https://www.tiktok.com/@" + u : "";
+    case "pinterest": return username ? "https://www.pinterest.com/" + u + "/" : "";
+    case "twitter": return username ? "https://twitter.com/" + u : "";
+    case "spotify": return pid ? "https://open.spotify.com/user/" + id : "";
+    case "roblox": return pid ? "https://www.roblox.com/users/" + id + "/profile" : "";
+    case "discord": return pid ? "https://discord.com/users/" + id : "";
+    default: return "";
+  }
 }
 
 async function fetchNowPlaying(env, userId) {
